@@ -75,8 +75,9 @@ public class MethodMetadataCache {
             meta.setHttpExchangeLoggerClass(ann.logger());
         }
 
-        if (method.isAnnotationPresent(ApiName.class)) {
-            meta.setApiName(method.getAnnotation(ApiName.class).value());
+        ApiName apiName = method.getAnnotation(ApiName.class);
+        if (apiName != null) {
+            meta.setApiName(apiName.value());
         }
 
         return meta;

@@ -300,4 +300,25 @@ class UserApiClientWireMockTest {
                 .timer();
         assertThat(timer).as("Timer should use Java method name when @ApiName is absent").isNotNull();
     }
+
+    @Test
+    void micrometer_recordsRedirectionOutcomeFor3xx() {
+        assumeTrue(meterRegistry != null, "MeterRegistry not available – skipping observability test");
+
+        wireMock.stubFor(delete(urlPathEqualTo("/users/302"))
+                .willReturn(aResponse()
+                        .withStatus(302)
+                        .withHeader("Location", "/users/42")));
+
+        StepVerifier.create(userApiClient.deleteUser("302"))
+                .verifyComplete();
+
+        Timer timer = meterRegistry.find("http.client.requests")
+                .tag("client.name", "user-service")
+                .tag("api.name", "deleteUser")
+                .tag("http.method", "DELETE")
+                .tag("outcome", "REDIRECTION")
+                .timer();
+        assertThat(timer).as("Timer with REDIRECTION outcome should be recorded").isNotNull();
+    }
 }
