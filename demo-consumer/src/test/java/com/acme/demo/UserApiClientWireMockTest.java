@@ -246,6 +246,7 @@ class UserApiClientWireMockTest {
         // The timer should be registered with the expected tags
         Timer timer = meterRegistry.find("http.client.requests")
                 .tag("client.name", "user-service")
+                .tag("api.name", "user.getById")
                 .tag("http.method", "GET")
                 .tag("outcome", "SUCCESS")
                 .timer();
@@ -266,9 +267,37 @@ class UserApiClientWireMockTest {
 
         Timer timer = meterRegistry.find("http.client.requests")
                 .tag("client.name", "user-service")
+                .tag("api.name", "user.getById")
                 .tag("http.method", "GET")
                 .tag("outcome", "CLIENT_ERROR")
                 .timer();
         assertThat(timer).as("Timer with CLIENT_ERROR outcome should be recorded").isNotNull();
+    }
+
+    @Test
+    void micrometer_usesMethodNameWhenApiNameAnnotationMissing() {
+        assumeTrue(meterRegistry != null, "MeterRegistry not available – skipping observability test");
+
+        wireMock.stubFor(get(urlPathEqualTo("/users"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                [
+                                  {"id":"1","name":"Alice","email":"a@example.com"}
+                                ]
+                                """)));
+
+        StepVerifier.create(userApiClient.listUsers(null).collectList())
+                .assertNext(list -> assertThat(list).hasSize(1))
+                .verifyComplete();
+
+        Timer timer = meterRegistry.find("http.client.requests")
+                .tag("client.name", "user-service")
+                .tag("api.name", "listUsers")
+                .tag("http.method", "GET")
+                .tag("outcome", "SUCCESS")
+                .timer();
+        assertThat(timer).as("Timer should use Java method name when @ApiName is absent").isNotNull();
     }
 }

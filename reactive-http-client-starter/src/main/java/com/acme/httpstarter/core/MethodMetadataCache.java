@@ -24,6 +24,7 @@ public class MethodMetadataCache {
     private MethodMetadata parse(Method method) {
         MethodMetadata meta = new MethodMetadata();
         meta.setMethod(method);
+        meta.setApiName(method.getName());
 
         // ---- HTTP verb ----
         if (method.isAnnotationPresent(GET.class)) {
@@ -72,6 +73,10 @@ public class MethodMetadataCache {
             LogHttpExchange ann = method.getAnnotation(LogHttpExchange.class);
             meta.setHttpExchangeLoggingEnabled(true);
             meta.setHttpExchangeLoggerClass(ann.logger());
+        }
+
+        if (method.isAnnotationPresent(ApiName.class)) {
+            meta.setApiName(method.getAnnotation(ApiName.class).value());
         }
 
         return meta;

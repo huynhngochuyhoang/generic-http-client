@@ -57,6 +57,7 @@ public class MyApp {
 public interface UserApiClient {
 
     @GET("/users/{id}")
+    @ApiName("user.getById")
     @LogHttpExchange
     Mono<UserDto> getUser(
         @PathVar("id") String id,
@@ -174,6 +175,7 @@ The integration tests in `UserApiClientWireMockTest` spin up a WireMock server o
 | Annotation | Target | Description |
 |---|---|---|
 | `@ReactiveHttpClient(name, baseUrl)` | Interface | Declares a reactive HTTP client interface |
+| `@ApiName("...")` | Method | Optional logical name for observability tag `api.name` (default: Java method name) |
 | `@LogHttpExchange(logger = ...)` | Method | Logs request/response; allows custom logger implementation |
 | `@GET(path)` | Method | HTTP GET |
 | `@POST(path)` | Method | HTTP POST |
@@ -461,6 +463,7 @@ registers a `MicrometerHttpClientObserver` bean that fires after each request.
 | Tag | Example values | Description |
 |---|---|---|
 | `client.name` | `user-service` | Logical client name from `@ReactiveHttpClient(name = ...)` |
+| `api.name` | `user.getById`, `listUsers` | Method-level logical API name from `@ApiName`, fallback to Java method name |
 | `http.method` | `GET`, `POST` | HTTP verb |
 | `uri` | `/users/{id}` | Path template (configurable, see below) |
 | `http.status_code` | `200`, `404`, `500` | HTTP response status, or `CLIENT_ERROR` / `UNKNOWN` on network failure |
@@ -591,4 +594,3 @@ With Spring Boot 3's auto-configured `ObservationRegistry`, WebClient requests w
 carry trace context. Spans will be exported to your backend (Jaeger, Zipkin, OTLP collector, etc.).
 
 ---
-

@@ -20,13 +20,14 @@ import java.util.concurrent.TimeUnit;
  *   <tr>
  *     <td>{@code http.client.requests} (configurable)</td>
  *     <td>Timer (also exposes count + sum)</td>
- *     <td>client.name, http.method, uri, http.status_code, outcome, exception</td>
+ *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception</td>
  *   </tr>
  * </table>
  *
  * <h3>Tag semantics</h3>
  * <ul>
  *   <li><b>client.name</b> – logical name from {@code @ReactiveHttpClient(name = ...)}.</li>
+ *   <li><b>api.name</b> – logical API name from {@code @ApiName} (or Java method name by default).</li>
  *   <li><b>http.method</b> – uppercase HTTP verb (GET, POST, …).</li>
  *   <li><b>uri</b> – path template (e.g. {@code /users/{id}}) when
  *       {@code acme.http.observability.include-url-path=true} (default); {@code NONE} otherwise.</li>
@@ -104,6 +105,7 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
 
         return Tags.of(
                 Tag.of("client.name", event.getClientName()),
+                Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
                 Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
                 Tag.of("uri", uri),
                 Tag.of("http.status_code", statusCode),

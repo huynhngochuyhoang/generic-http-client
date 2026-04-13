@@ -505,6 +505,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             boolean logRespBody = observabilityConfig != null && observabilityConfig.isLogResponseBody();
             observer.record(new HttpClientObserverEvent(
                     clientName,
+                    meta.getApiName(),
                     meta.getHttpMethod(),
                     meta.getPathTemplate(),
                     statusCode != null ? statusCode.value() : null,

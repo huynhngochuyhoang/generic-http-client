@@ -9,6 +9,7 @@ package com.acme.httpstarter.observability;
 public final class HttpClientObserverEvent {
 
     private final String clientName;
+    private final String apiName;
     private final String httpMethod;
     private final String uriPath;
     private final Integer statusCode;
@@ -19,6 +20,7 @@ public final class HttpClientObserverEvent {
 
     public HttpClientObserverEvent(
             String clientName,
+            String apiName,
             String httpMethod,
             String uriPath,
             Integer statusCode,
@@ -27,6 +29,7 @@ public final class HttpClientObserverEvent {
             Object requestBody,
             Object responseBody) {
         this.clientName = clientName;
+        this.apiName = apiName;
         this.httpMethod = httpMethod;
         this.uriPath = uriPath;
         this.statusCode = statusCode;
@@ -38,6 +41,9 @@ public final class HttpClientObserverEvent {
 
     /** The logical name of the client (value of {@code @ReactiveHttpClient(name = ...)}). */
     public String getClientName() { return clientName; }
+
+    /** Logical API name for the method ({@code @ApiName} or Java method name by default). */
+    public String getApiName() { return apiName; }
 
     /** HTTP verb: {@code GET}, {@code POST}, {@code PUT}, {@code DELETE}, etc. */
     public String getHttpMethod() { return httpMethod; }
@@ -71,6 +77,7 @@ public final class HttpClientObserverEvent {
     public String toString() {
         return "HttpClientObserverEvent{" +
                 "clientName='" + clientName + '\'' +
+                ", apiName='" + apiName + '\'' +
                 ", httpMethod='" + httpMethod + '\'' +
                 ", uriPath='" + uriPath + '\'' +
                 ", statusCode=" + statusCode +
