@@ -48,7 +48,11 @@ public final class HttpClientObserverEvent {
     /** HTTP response status code, or {@code null} if the request never reached the server. */
     public Integer getStatusCode() { return statusCode; }
 
-    /** Elapsed wall-clock time in milliseconds from the start of the request to the first response byte. */
+    /**
+     * Elapsed wall-clock time in milliseconds from the start of the request to response completion.
+     * For {@code Mono<T>} responses this is the time to receive the single value (or error).
+     * For {@code Flux<T>} (streaming) responses this is the time until all items have been emitted.
+     */
     public long getDurationMs() { return durationMs; }
 
     /** Non-null when the exchange ended with an error (network failure, timeout, error-decoded exception, …). */

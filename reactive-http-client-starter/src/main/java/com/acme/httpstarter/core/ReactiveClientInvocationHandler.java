@@ -156,6 +156,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         AtomicReference<HttpStatusCode> responseStatus = new AtomicReference<>();
         AtomicReference<Map<String, List<String>>> responseHeaders = new AtomicReference<>(Map.of());
 
+        // Resolve observer once per invocation to avoid repeated volatile reads
+        HttpClientObserver observer = getObserver();
+
         if (meta.isReturnsFlux()) {
             Flux<?> flux = requestHeadersSpec.exchangeToFlux(clientResponse -> {
                 responseStatus.set(clientResponse.statusCode());
@@ -176,10 +179,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             } else {
                 logRequest(meta, start);
             }
-            if (getObserver() != null) {
+            if (observer != null) {
                 flux = flux
-                        .doOnComplete(() -> notifyObserver(meta, resolved, start, responseStatus.get(), null, null))
-                        .doOnError(error -> notifyObserver(meta, resolved, start, responseStatus.get(), error, null));
+                        .doOnComplete(() -> notifyObserver(observer, meta, resolved, start, responseStatus.get(), null, null))
+                        .doOnError(error -> notifyObserver(observer, meta, resolved, start, responseStatus.get(), error, null));
             }
             return flux;
         }
@@ -203,10 +206,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         } else {
             logRequest(meta, start);
         }
-        if (getObserver() != null) {
+        if (observer != null) {
             mono = mono
-                    .doOnSuccess(body -> notifyObserver(meta, resolved, start, responseStatus.get(), null, body))
-                    .doOnError(error -> notifyObserver(meta, resolved, start, responseStatus.get(), error, null));
+                    .doOnSuccess(body -> notifyObserver(observer, meta, resolved, start, responseStatus.get(), null, body))
+                    .doOnError(error -> notifyObserver(observer, meta, resolved, start, responseStatus.get(), error, null));
         }
         return mono;
     }
@@ -490,6 +493,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      * to ensure it never propagates to business logic.
      */
     private void notifyObserver(
+            HttpClientObserver observer,
             MethodMetadata meta,
             RequestArgumentResolver.ResolvedArgs resolved,
             long startMs,
@@ -499,7 +503,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         try {
             boolean logBody = observabilityConfig != null && observabilityConfig.isLogRequestBody();
             boolean logRespBody = observabilityConfig != null && observabilityConfig.isLogResponseBody();
-            getObserver().record(new HttpClientObserverEvent(
+            observer.record(new HttpClientObserverEvent(
                     clientName,
                     meta.getHttpMethod(),
                     meta.getPathTemplate(),

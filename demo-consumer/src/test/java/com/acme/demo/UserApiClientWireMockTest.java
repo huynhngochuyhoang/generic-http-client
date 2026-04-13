@@ -6,7 +6,6 @@ import com.acme.demo.dto.UserDto;
 import com.acme.httpstarter.enable.EnableReactiveHttpClients;
 import com.acme.httpstarter.exception.HttpClientException;
 import com.acme.httpstarter.observability.HttpClientObserver;
-import com.acme.httpstarter.observability.HttpClientObserverEvent;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -19,11 +18,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration test for {@link UserApiClient} using WireMock as the upstream stub.
@@ -233,7 +230,7 @@ class UserApiClientWireMockTest {
 
     @Test
     void micrometer_recordsTimerMetricOnSuccess() {
-        if (meterRegistry == null) return; // skip if no actuator
+        assumeTrue(meterRegistry != null, "MeterRegistry not available – skipping observability test");
 
         wireMock.stubFor(get(urlPathEqualTo("/users/10"))
                 .willReturn(aResponse()
@@ -258,7 +255,7 @@ class UserApiClientWireMockTest {
 
     @Test
     void micrometer_recordsTimerMetricOnClientError() {
-        if (meterRegistry == null) return;
+        assumeTrue(meterRegistry != null, "MeterRegistry not available – skipping observability test");
 
         wireMock.stubFor(get(urlPathEqualTo("/users/404"))
                 .willReturn(aResponse().withStatus(404).withBody("Not Found")));

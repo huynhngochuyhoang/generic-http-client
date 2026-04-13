@@ -69,10 +69,9 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
         }
         try {
             Tags tags = buildTags(event);
-            Timer.builder(config.getMetricName())
-                    .description("HTTP client request timer")
-                    .tags(tags)
-                    .register(meterRegistry)
+            // meterRegistry.timer() is idempotent – returns existing timer for the same
+            // name+tags combination, avoiding repeated Timer.builder() allocation overhead.
+            meterRegistry.timer(config.getMetricName(), tags)
                     .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
 
             if (log.isDebugEnabled()) {
@@ -120,6 +119,7 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
         Integer code = event.getStatusCode();
         if (code == null) return "UNKNOWN";
         if (code >= 200 && code < 300) return "SUCCESS";
+        if (code >= 300 && code < 400) return "REDIRECTION";
         if (code >= 400 && code < 500) return "CLIENT_ERROR";
         if (code >= 500) return "SERVER_ERROR";
         return "UNKNOWN";
