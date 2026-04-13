@@ -1,6 +1,8 @@
 package com.acme.httpstarter.core;
 
 import com.acme.httpstarter.config.ReactiveHttpClientProperties;
+import com.acme.httpstarter.observability.HttpClientObserver;
+import com.acme.httpstarter.observability.HttpClientObserverEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -54,6 +56,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private final Object retryRegistry;
     private final Object bulkheadRegistry;
 
+    // Observability – resolved lazily on first request to avoid ordering issues during
+    // context initialisation (the observer bean may not yet exist when this handler is constructed)
+    private final ReactiveHttpClientProperties.ObservabilityConfig observabilityConfig;
+    private volatile HttpClientObserver resolvedObserver;
+    private volatile boolean observerResolved = false;
+
     public ReactiveClientInvocationHandler(
             WebClient webClient,
             MethodMetadataCache metadataCache,
@@ -64,7 +72,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             ApplicationContext applicationContext,
             Object circuitBreakerRegistry,
             Object retryRegistry,
-            Object bulkheadRegistry) {
+            Object bulkheadRegistry,
+            HttpClientObserver httpClientObserver,
+            ReactiveHttpClientProperties.ObservabilityConfig observabilityConfig) {
         this.webClient = webClient;
         this.metadataCache = metadataCache;
         this.argumentResolver = argumentResolver;
@@ -75,6 +85,32 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.retryRegistry = retryRegistry;
         this.bulkheadRegistry = bulkheadRegistry;
+        // Pre-populate if the observer is already available at construction time
+        if (httpClientObserver != null) {
+            this.resolvedObserver = httpClientObserver;
+            this.observerResolved = true;
+        }
+        this.observabilityConfig = observabilityConfig;
+    }
+
+    /**
+     * Returns the {@link HttpClientObserver} to use for this handler.
+     * Resolved lazily from the {@link ApplicationContext} on first call so that
+     * auto-configured observer beans that are initialised after this handler is
+     * constructed are still picked up.
+     */
+    private HttpClientObserver getObserver() {
+        if (!observerResolved) {
+            synchronized (this) {
+                if (!observerResolved) {
+                    resolvedObserver = applicationContext
+                            .getBeanProvider(HttpClientObserver.class)
+                            .getIfAvailable();
+                    observerResolved = true;
+                }
+            }
+        }
+        return resolvedObserver;
     }
 
     @Override
@@ -140,6 +176,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             } else {
                 logRequest(meta, start);
             }
+            if (getObserver() != null) {
+                flux = flux
+                        .doOnComplete(() -> notifyObserver(meta, resolved, start, responseStatus.get(), null, null))
+                        .doOnError(error -> notifyObserver(meta, resolved, start, responseStatus.get(), error, null));
+            }
             return flux;
         }
 
@@ -161,6 +202,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                             exchangeLogger, meta, resolved, start, responseStatus.get(), responseHeaders.get(), null, error));
         } else {
             logRequest(meta, start);
+        }
+        if (getObserver() != null) {
+            mono = mono
+                    .doOnSuccess(body -> notifyObserver(meta, resolved, start, responseStatus.get(), null, body))
+                    .doOnError(error -> notifyObserver(meta, resolved, start, responseStatus.get(), error, null));
         }
         return mono;
     }
@@ -436,6 +482,36 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         Map<String, List<String>> copied = new LinkedHashMap<>();
         response.headers().asHttpHeaders().forEach((key, values) -> copied.put(key, List.copyOf(values)));
         return copied;
+    }
+
+    /**
+     * Fires an {@link HttpClientObserverEvent} to the registered {@link HttpClientObserver}
+     * (usually the Micrometer observer). Any exception thrown by the observer is swallowed
+     * to ensure it never propagates to business logic.
+     */
+    private void notifyObserver(
+            MethodMetadata meta,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            long startMs,
+            HttpStatusCode statusCode,
+            Throwable error,
+            Object responseBody) {
+        try {
+            boolean logBody = observabilityConfig != null && observabilityConfig.isLogRequestBody();
+            boolean logRespBody = observabilityConfig != null && observabilityConfig.isLogResponseBody();
+            getObserver().record(new HttpClientObserverEvent(
+                    clientName,
+                    meta.getHttpMethod(),
+                    meta.getPathTemplate(),
+                    statusCode != null ? statusCode.value() : null,
+                    System.currentTimeMillis() - startMs,
+                    error,
+                    logBody ? resolved.body() : null,
+                    logRespBody ? responseBody : null
+            ));
+        } catch (Exception e) {
+            log.warn("HttpClientObserver threw an exception – ignoring: {}", e.getMessage());
+        }
     }
 
 }
