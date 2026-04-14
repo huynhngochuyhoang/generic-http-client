@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, ApplicationContextAware {
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
+    private static final int DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB = 2;
 
     private Class<T> type;
     private ApplicationContext applicationContext;
@@ -138,6 +139,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     private WebClient buildWebClient(String baseUrl, ReactiveHttpClientProperties.ClientConfig config) {
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectTimeoutMs())
+                .compress(config.isCompressionEnabled())
                 .doOnConnected(conn ->
                         conn.addHandlerLast(new ReadTimeoutHandler(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)));
 
@@ -148,6 +150,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         WebClient.Builder configured = builder
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(resolveCodecMaxInMemorySizeBytes(config)))
                 .filter(correlationIdFilter());
 
         if (config.isLogBody()) {
@@ -155,6 +158,13 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         }
 
         return configured.build();
+    }
+
+    private int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
+        int sizeMb = config.getCodecMaxInMemorySizeMb() > 0
+                ? config.getCodecMaxInMemorySizeMb()
+                : DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB;
+        return Math.toIntExact(sizeMb * 1024L * 1024L);
     }
 
     /** Propagates X-Correlation-Id from MDC when available. */

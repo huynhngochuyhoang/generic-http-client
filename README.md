@@ -96,6 +96,8 @@ acme:
         base-url: https://api.example.com
         connect-timeout-ms: 2000
         read-timeout-ms: 5000
+        codec-max-in-memory-size-mb: 2      # default 2MB for WebClient codec buffer
+        compression-enabled: false          # default false
         log-body: false                    # set true to log response status (caution: PII)
         resilience:
           enabled: true
