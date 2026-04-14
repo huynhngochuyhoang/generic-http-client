@@ -56,7 +56,8 @@ public class MethodMetadataCache {
                         meta.getHeaderMapParams().add(i);
                     } else {
                         if (hp.value() == null || hp.value().isBlank()) {
-                            throw new IllegalArgumentException("@HeaderParam value must not be blank for non-Map parameter: " + method);
+                            throw new IllegalArgumentException(
+                                    "@HeaderParam value must not be blank for non-Map parameter at index " + i + " in method: " + method);
                         }
                         meta.getHeaderParams().put(i, hp.value());
                     }

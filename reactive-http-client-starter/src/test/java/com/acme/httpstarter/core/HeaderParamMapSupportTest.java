@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,6 +34,7 @@ class HeaderParamMapSupportTest {
         assertEquals(2, resolved.headers().size());
         assertEquals("trace-123", resolved.headers().get("X-Trace-Id"));
         assertEquals("tenant-a", resolved.headers().get("X-Tenant"));
+        assertFalse(resolved.headers().containsKey(""));
     }
 
     @Test
@@ -47,7 +49,8 @@ class HeaderParamMapSupportTest {
     @Test
     void shouldRejectBlankHeaderNameForScalarParam() throws Exception {
         Method method = InvalidClient.class.getMethod("get", String.class);
-        assertThrows(IllegalArgumentException.class, () -> new MethodMetadataCache().get(method));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new MethodMetadataCache().get(method));
+        assertTrue(ex.getMessage().contains("must not be blank"));
     }
 
     interface ValidClient {
