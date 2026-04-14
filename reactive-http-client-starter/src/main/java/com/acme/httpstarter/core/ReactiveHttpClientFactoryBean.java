@@ -31,6 +31,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
     private static final int DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB = 2;
+    private static final int MAX_CODEC_MAX_IN_MEMORY_SIZE_MB = Integer.MAX_VALUE / (1024 * 1024);
 
     private Class<T> type;
     private ApplicationContext applicationContext;
@@ -164,6 +165,10 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         int sizeMb = config.getCodecMaxInMemorySizeMb() > 0
                 ? config.getCodecMaxInMemorySizeMb()
                 : DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB;
+        if (sizeMb > MAX_CODEC_MAX_IN_MEMORY_SIZE_MB) {
+            throw new IllegalArgumentException("acme.http.clients.*.codec-max-in-memory-size-mb must be <= "
+                    + MAX_CODEC_MAX_IN_MEMORY_SIZE_MB + " but was " + sizeMb);
+        }
         return Math.toIntExact(sizeMb * 1024L * 1024L);
     }
 
