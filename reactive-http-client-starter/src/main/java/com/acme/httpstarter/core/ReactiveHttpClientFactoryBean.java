@@ -170,10 +170,6 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                     + MAX_CODEC_MAX_IN_MEMORY_SIZE_MB + " but was " + sizeMb);
         }
         long sizeBytes = sizeMb * 1024L * 1024L;
-        if (sizeBytes > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("acme.http.clients.*.codec-max-in-memory-size-mb is too large: "
-                    + sizeMb);
-        }
         return (int) sizeBytes;
     }
 
