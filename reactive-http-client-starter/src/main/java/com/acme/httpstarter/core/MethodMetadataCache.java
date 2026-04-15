@@ -90,6 +90,15 @@ public class MethodMetadataCache {
             meta.setApiName(apiName.value());
         }
 
+        TimeoutMs timeoutMs = method.getAnnotation(TimeoutMs.class);
+        if (timeoutMs != null) {
+            if (timeoutMs.value() < 0) {
+                throw new IllegalArgumentException(
+                        "@TimeoutMs value must be >= 0 for method: " + method);
+            }
+            meta.setTimeoutMs(timeoutMs.value());
+        }
+
         return meta;
     }
 }

@@ -4,7 +4,6 @@ import com.acme.httpstarter.annotation.ReactiveHttpClient;
 import com.acme.httpstarter.config.ReactiveHttpClientProperties;
 import com.acme.httpstarter.observability.HttpClientObserver;
 import io.netty.channel.ChannelOption;
-import io.netty.handler.timeout.ReadTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.FactoryBean;
@@ -19,7 +18,6 @@ import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 
 import java.lang.reflect.Proxy;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Spring {@link FactoryBean} that creates a JDK dynamic proxy for a given
@@ -140,9 +138,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     private WebClient buildWebClient(String baseUrl, ReactiveHttpClientProperties.ClientConfig config) {
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectTimeoutMs())
-                .compress(config.isCompressionEnabled())
-                .doOnConnected(conn ->
-                        conn.addHandlerLast(new ReadTimeoutHandler(config.getReadTimeoutMs(), TimeUnit.MILLISECONDS)));
+                .compress(config.isCompressionEnabled());
 
         WebClient.Builder builder = applicationContext
                 .getBeanProvider(WebClient.Builder.class)

@@ -170,6 +170,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 return buildFlux(clientResponse, meta.getResponseType());
             });
             flux = applyResilienceFlux(flux, meta);
+            flux = applyTimeoutFlux(flux, meta);
             if (exchangeLogger != null) {
                 flux = flux
                         .doOnComplete(() -> logExchange(
@@ -197,6 +198,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return buildMono(clientResponse, meta.getResponseType());
         });
         mono = applyResilienceMono(mono, meta);
+        mono = applyTimeoutMono(mono, meta);
         if (exchangeLogger != null) {
             mono = mono
                     .doOnSuccess(body -> logExchange(
@@ -245,9 +247,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             mono = applyRetryMono(mono, resilience);
         }
         mono = applyBulkheadMono(mono, resilience);
-        if (resilience.getTimeoutMs() > 0) {
-            mono = mono.timeout(Duration.ofMillis(resilience.getTimeoutMs()));
-        }
         return mono;
     }
 
@@ -261,10 +260,37 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             flux = applyRetryFlux(flux, resilience);
         }
         flux = applyBulkheadFlux(flux, resilience);
-        if (resilience.getTimeoutMs() > 0) {
-            flux = flux.timeout(Duration.ofMillis(resilience.getTimeoutMs()));
-        }
         return flux;
+    }
+
+    private Mono<?> applyTimeoutMono(Mono<?> mono, MethodMetadata meta) {
+        long timeoutMs = resolveTimeoutMs(meta);
+        if (timeoutMs <= 0) {
+            return mono;
+        }
+        return mono.timeout(Duration.ofMillis(timeoutMs));
+    }
+
+    private Flux<?> applyTimeoutFlux(Flux<?> flux, MethodMetadata meta) {
+        long timeoutMs = resolveTimeoutMs(meta);
+        if (timeoutMs <= 0) {
+            return flux;
+        }
+        return flux.timeout(Duration.ofMillis(timeoutMs));
+    }
+
+    private long resolveTimeoutMs(MethodMetadata meta) {
+        if (meta.getTimeoutMs() >= 0) {
+            return meta.getTimeoutMs();
+        }
+        if (clientConfig == null) {
+            return 0;
+        }
+        ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
+        if (resilience != null && resilience.isEnabled() && resilience.getTimeoutMs() > 0) {
+            return resilience.getTimeoutMs();
+        }
+        return clientConfig.getReadTimeoutMs();
     }
 
     @SuppressWarnings("unchecked")
