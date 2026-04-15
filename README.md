@@ -16,7 +16,7 @@ A **Spring Boot Starter** that provides a declarative, annotation-driven HTTP cl
 
 - **Declarative client interfaces** – define HTTP calls with simple annotations (`@GET`, `@POST`, `@PUT`, `@DELETE`).
 - **Automatic parameter extraction** – `@PathVar`, `@QueryParam`, `@HeaderParam`, `@Body` are resolved automatically via reflection.
-- **Resilience4j integration** – circuit-breaker, retry, bulkhead, and per-request timeout, configured per client in `application.yml`.
+- **Resilience4j integration** – circuit-breaker, retry, bulkhead with starter-level timeout support and per-API override.
 - **Auto-configuration** – register client beans with a single `@EnableReactiveHttpClients` annotation; no boilerplate `@Bean` methods.
 - **IDE autowire support** – `@ReactiveHttpClient` carries `@Component` as a meta-annotation so IntelliJ IDEA's Spring plugin detects injected client beans without false-positive warnings.
 - **Observability (Micrometer)** – automatic metrics and trace spans for every HTTP call when `micrometer-core` is on the classpath.
@@ -57,6 +57,7 @@ public interface UserApiClient {
 
     @GET("/users/{id}")
     @ApiName("user.getById")
+    @TimeoutMs(8000) // override default read-timeout-ms for this API only
     @LogHttpExchange
     Mono<UserDto> getUser(
         @PathVar("id") String id,
@@ -174,6 +175,7 @@ This command runs tests for all modules in the repository.
 |---|---|---|
 | `@ReactiveHttpClient(name, baseUrl)` | Interface | Declares a reactive HTTP client interface |
 | `@ApiName("...")` | Method | Optional logical name for observability tag `api.name` (default: Java method name) |
+| `@TimeoutMs(1500)` | Method | Override timeout (ms) for a single API method (`0` disables timeout for that method) |
 | `@LogHttpExchange(logger = ...)` | Method | Logs request/response; allows custom logger implementation |
 | `@GET(path)` | Method | HTTP GET |
 | `@POST(path)` | Method | HTTP POST |
@@ -247,7 +249,7 @@ reactive-http-client/
 ## Resilience4j Integration Guide
 
 The starter integrates **Resilience4j** in the reactive client layer using Reactor operators.
-Each HTTP call can be wrapped by a circuit-breaker, retry policy, bulkhead and/or timeout.
+Each HTTP call can be wrapped by a circuit-breaker, retry policy and/or bulkhead.
 
 ### How It Works
 
@@ -262,7 +264,7 @@ raw WebClient call
   → circuit-breaker (fail-fast if open)
   → retry (for GET/HEAD by default)
   → bulkhead (limit concurrent calls)
-  → timeout (per-client wall-clock limit)
+  → timeout (method-level `@TimeoutMs`, else resilience timeout-ms, else client read-timeout-ms)
 ```
 
 ### Starter-level Configuration (Recommended)

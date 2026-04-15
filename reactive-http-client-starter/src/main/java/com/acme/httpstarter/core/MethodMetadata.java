@@ -36,6 +36,8 @@ public class MethodMetadata {
     private Type responseType;
     private Method method;
     private String apiName;
+    /** Method-level timeout override in milliseconds: -1 means not configured. */
+    private long timeoutMs = -1;
     private boolean httpExchangeLoggingEnabled;
     private Class<? extends HttpExchangeLogger> httpExchangeLoggerClass;
 
@@ -69,6 +71,9 @@ public class MethodMetadata {
 
     public String getApiName() { return apiName; }
     public void setApiName(String apiName) { this.apiName = apiName; }
+
+    public long getTimeoutMs() { return timeoutMs; }
+    public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
 
     public boolean isHttpExchangeLoggingEnabled() { return httpExchangeLoggingEnabled; }
     public void setHttpExchangeLoggingEnabled(boolean httpExchangeLoggingEnabled) {
