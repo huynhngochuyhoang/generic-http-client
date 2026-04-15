@@ -21,7 +21,7 @@ import java.util.Map;
  *         compression-enabled: false
  *         log-body: false
  *         resilience:
- *           enabled: true
+ *           enabled: false
  *           circuit-breaker: default
  *           retry: default
  *           bulkhead: default
@@ -74,7 +74,7 @@ public class ReactiveHttpClientProperties {
 
     public static class ResilienceConfig {
 
-        private boolean enabled = true;
+        private boolean enabled = false;
         /** Name of the Resilience4j CircuitBreaker instance (from application config). */
         private String circuitBreaker = "default";
         /** Name of the Resilience4j Retry instance. */

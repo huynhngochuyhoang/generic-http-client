@@ -100,7 +100,7 @@ acme:
         compression-enabled: false          # default false
         log-body: false                    # set true to log response status (caution: PII)
         resilience:
-          enabled: true
+          enabled: false                  # default false (opt-in at client level)
           circuit-breaker: user-service    # Resilience4j instance name
           retry: user-service
           bulkhead: user-service
@@ -279,7 +279,7 @@ acme:
         connect-timeout-ms: 2000
         read-timeout-ms: 5000
         resilience:
-          enabled: true
+          enabled: true                   # opt-in when you want client-level resilience
           circuit-breaker: user-service   # Resilience4j instance name
           retry: user-service             # null or "default" to use default instance
           bulkhead: user-service
@@ -404,15 +404,15 @@ resilience4j:
 
 | Requirement | Starter-level config | Service-layer annotation |
 |---|---|---|
-| Apply policy to **all methods of a client** | ✅ Preferred | Repetitive |
+| Apply policy to **all methods of a client** | ✅ Optional | Repetitive |
 | **Different policy per method** | ✗ Not supported | ✅ Required |
 | **Fallback / default value** | ✗ | ✅ `fallbackMethod` |
 | Retry **non-idempotent** methods | ✗ (GET/HEAD only) | ✅ Opt-in |
 | **Central config** without code changes | ✅ `application.yml` | ✗ Annotations |
 | **Avoid AOP overhead** | ✅ | Adds CGLIB proxy |
 
-**Recommendation:** start with starter-level config for consistency; add service-layer annotations only
-for methods that need a fallback or a different policy.
+**Recommendation:** prefer service-layer annotations (or per-API policy) as default.
+Use starter-level (client-wide) resilience only when every method in that client should share the same policy.
 
 ---
 
