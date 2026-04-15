@@ -263,6 +263,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return flux;
     }
 
+    /**
+     * Applies timeout when resolved timeout is {@code > 0}.
+     * A resolved value of {@code 0} disables timeout (from method override or config).
+     */
     private Mono<?> applyTimeoutMono(Mono<?> mono, MethodMetadata meta) {
         long timeoutMs = resolveTimeoutMs(meta);
         if (timeoutMs <= 0) {
@@ -271,6 +275,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return mono.timeout(Duration.ofMillis(timeoutMs));
     }
 
+    /**
+     * Applies timeout when resolved timeout is {@code > 0}.
+     * A resolved value of {@code 0} disables timeout (from method override or config).
+     */
     private Flux<?> applyTimeoutFlux(Flux<?> flux, MethodMetadata meta) {
         long timeoutMs = resolveTimeoutMs(meta);
         if (timeoutMs <= 0) {
@@ -280,6 +288,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private long resolveTimeoutMs(MethodMetadata meta) {
+        // Method-level override has highest priority.
+        // A method annotation value of 0 explicitly disables timeout for that API method.
         if (meta.getTimeoutMs() >= 0) {
             return meta.getTimeoutMs();
         }

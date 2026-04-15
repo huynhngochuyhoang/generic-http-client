@@ -94,7 +94,7 @@ public class MethodMetadataCache {
         if (timeoutMs != null) {
             if (timeoutMs.value() < 0) {
                 throw new IllegalArgumentException(
-                        "@TimeoutMs value must be >= 0 for method: " + method);
+                        "@TimeoutMs value must be non-negative (>= 0) for method: " + method);
             }
             meta.setTimeoutMs(timeoutMs.value());
         }
