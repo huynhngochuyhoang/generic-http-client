@@ -2,6 +2,7 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.netty.channel.ChannelOption;
 import org.slf4j.Logger;
@@ -169,20 +170,9 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         return (int) sizeBytes;
     }
 
-    /** Propagates X-Correlation-Id from MDC when available. */
+    /** Propagates X-Correlation-Id from Reactor context (set by CorrelationIdWebFilter) or MDC. */
     private ExchangeFilterFunction correlationIdFilter() {
-        return ExchangeFilterFunction.ofRequestProcessor(request -> {
-            String correlationId = org.slf4j.MDC.get("correlationId");
-            if (StringUtils.hasText(correlationId)) {
-                return Mono.just(
-                        org.springframework.web.reactive.function.client.ClientRequest
-                                .from(request)
-                                .header("X-Correlation-Id", correlationId)
-                                .build()
-                );
-            }
-            return Mono.just(request);
-        });
+        return CorrelationIdWebFilter.exchangeFilter();
     }
 
     /** Logs method, URL, status and latency. */

@@ -2,6 +2,7 @@ package io.github.huynhngochuyhoang.httpstarter.config;
 
 import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
 import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
+import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.MicrometerHttpClientObserver;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -11,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -38,6 +40,13 @@ public class ReactiveHttpClientAutoConfiguration {
     @ConditionalOnMissingBean
     public WebClient.Builder starterWebClientBuilder() {
         return WebClient.builder();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(CorrelationIdWebFilter.class)
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+    public CorrelationIdWebFilter correlationIdWebFilter() {
+        return new CorrelationIdWebFilter();
     }
 
     @Bean
