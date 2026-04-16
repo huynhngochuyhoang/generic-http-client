@@ -1,5 +1,8 @@
 # reactive-http-client
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.huynhngochuyhoang/reactive-http-client-starter.svg)](https://search.maven.org/artifact/io.github.huynhngochuyhoang/reactive-http-client-starter)
+[![CI](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml)
+
 A **Spring Boot Starter** that provides a declarative, annotation-driven HTTP client layer for Spring WebFlux (reactive) applications, with built-in **Resilience4j** support for circuit-breaking, retries, bulkheads and timeouts.
 
 ---
@@ -33,7 +36,7 @@ A **Spring Boot Starter** that provides a declarative, annotation-driven HTTP cl
 <dependency>
     <groupId>io.github.huynhngochuyhoang</groupId>
     <artifactId>reactive-http-client-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 

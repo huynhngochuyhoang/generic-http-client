@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] – 2026-04-16
+
 ### Added
 
 - **`ErrorCategory` enum** – high-level classification of HTTP client errors
@@ -31,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HttpClientException` and `RemoteServiceException` now expose `getErrorCategory()`
   in addition to the existing `getStatusCode()` and `getResponseBody()` methods.
   All existing constructors and method signatures are **backward-compatible**.
+
+### Fixed
+
+- Fixed an issue where `X-Correlation-Id` was not forwarded on outbound reactive
+  HTTP client calls.
 
 ---
 
@@ -68,5 +77,6 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/huynhngochuyhoang/reactive-http-client/releases/tag/v1.0.0
