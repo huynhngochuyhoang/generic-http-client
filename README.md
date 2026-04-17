@@ -11,13 +11,15 @@ Spring Boot starter để tạo **declarative reactive HTTP client** (annotation
 - Micrometer observability (optional)
 - Correlation ID propagation
 
+English summary: a Spring Boot starter for building annotation-driven reactive HTTP clients with optional resilience and observability integration.
+
 ---
 
 ## 1) Production readiness hiện tại
 
 ### Đánh giá nhanh
 
-**Mức hiện tại: “Production-capable cho đa số service nội bộ, nhưng chưa phải full enterprise-ready out-of-the-box”.**
+**Mức hiện tại: có thể chạy production ổn cho phần lớn service nội bộ nếu hoàn thiện thêm lớp vận hành/bảo mật ở ứng dụng; chưa full enterprise-ready out-of-the-box.**
 
 | Nhóm | Trạng thái | Ghi chú |
 |---|---|---|
@@ -29,12 +31,17 @@ Spring Boot starter để tạo **declarative reactive HTTP client** (annotation
 | Operational hardening (governance) | ⚠️ Thiếu một phần | Chưa có readiness checklist/guardrails mạnh cho production |
 | Integration/contract testing mẫu | ⚠️ Thiếu | Chủ yếu unit test trong starter |
 
-### Những điểm còn thiếu (nên bổ sung ở app hoặc roadmap)
+### Những điểm còn thiếu
+
+#### App cần tự hoàn thiện ngay khi dùng production
 
 1. **Chuẩn hóa auth outbound**: cơ chế chung cho OAuth2/JWT/API key (inject header tự động thay vì service nào cũng tự làm)
-2. **Network hardening knobs**: cấu hình rõ cho proxy, SSL/mTLS, connection pool tuning theo môi trường
+2. **Network hardening policy**: chuẩn cấu hình proxy, SSL/mTLS, connection pool tuning theo môi trường
 3. **PII-safe logging policy**: redaction/masking strategy khi bật logging body
 4. **Production runbook**: hướng dẫn rõ “khi lỗi tăng / timeout tăng / circuit open thì xử lý gì”
+
+#### Nên bổ sung vào roadmap starter
+
 5. **Integration sample**: demo app + mock upstream để validate hành vi thực tế (retry, timeout, metrics)
 
 > Lưu ý: Các mục trên không chặn việc dùng production, nhưng là phần cần hoàn thiện để vận hành lớn và an toàn hơn.
@@ -48,7 +55,7 @@ Spring Boot starter để tạo **declarative reactive HTTP client** (annotation
 - Spring Boot 3.x
 - Maven 3.8+
 
-### 2.2 Bước 1: Thêm dependency starter
+### 2.2 Thêm dependency starter
 
 ```xml
 <dependency>
@@ -60,7 +67,7 @@ Spring Boot starter để tạo **declarative reactive HTTP client** (annotation
 
 Trong app WebFlux, cần có `spring-boot-starter-webflux`.
 
-### 2.3 Bước 2: Enable scanning
+### 2.3 Enable scanning
 
 ```java
 @SpringBootApplication
@@ -72,7 +79,7 @@ public class MyApp {
 }
 ```
 
-### 2.4 Bước 3: Khai báo client interface
+### 2.4 Khai báo client interface
 
 ```java
 @ReactiveHttpClient(name = "user-service")
@@ -94,7 +101,7 @@ public interface UserApiClient {
 }
 ```
 
-### 2.5 Bước 4: Cấu hình `application.yml`
+### 2.5 Cấu hình `application.yml`
 
 ```yaml
 reactive:
@@ -115,7 +122,7 @@ reactive:
           timeout-ms: 0
 ```
 
-### 2.6 Bước 5: Inject và dùng
+### 2.6 Inject và dùng
 
 ```java
 @Service
