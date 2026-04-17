@@ -31,11 +31,11 @@ Spring Boot starter để tạo **declarative reactive HTTP client** (WebFlux) t
 
 ### Những điểm còn thiếu (nên bổ sung ở app hoặc roadmap)
 
-1. **Chuẩn hóa auth outbound**: cơ chế chung cho OAuth2/JWT/API key (inject header tự động thay vì service nào cũng tự làm).
-2. **Network hardening knobs**: cấu hình rõ cho proxy, SSL/mTLS, connection pool tuning theo môi trường.
-3. **PII-safe logging policy**: redaction/masking strategy khi bật logging body.
-4. **Production runbook**: hướng dẫn rõ “khi lỗi tăng / timeout tăng / circuit open thì xử lý gì”.
-5. **Integration sample**: demo app + mock upstream để validate hành vi thực tế (retry, timeout, metrics).
+1. **Chuẩn hóa auth outbound**: cơ chế chung cho OAuth2/JWT/API key (inject header tự động thay vì service nào cũng tự làm)
+2. **Network hardening knobs**: cấu hình rõ cho proxy, SSL/mTLS, connection pool tuning theo môi trường
+3. **PII-safe logging policy**: redaction/masking strategy khi bật logging body
+4. **Production runbook**: hướng dẫn rõ “khi lỗi tăng / timeout tăng / circuit open thì xử lý gì”
+5. **Integration sample**: demo app + mock upstream để validate hành vi thực tế (retry, timeout, metrics)
 
 > Lưu ý: Các mục trên không chặn việc dùng production, nhưng là phần cần hoàn thiện để vận hành lớn và an toàn hơn.
 
@@ -89,7 +89,7 @@ public interface UserApiClient {
     @POST("/users")
     Mono<UserDto> createUser(
             @Body CreateUserRequest body,
-            @HeaderParam("X-Tenant-Id") String tenantId
+            @HeaderParam("X-Tenant") String tenant
     );
 }
 ```
@@ -172,7 +172,7 @@ Mỗi call qua proxy đi theo pipeline:
 | 429 | `HttpClientException` | `RATE_LIMITED` |
 | 4xx (khác 429) | `HttpClientException` | `CLIENT_ERROR` |
 | 5xx | `RemoteServiceException` | `SERVER_ERROR` |
-| Timeout | `TimeoutException` | `TIMEOUT` |
+| Timeout | `TimeoutException` | `—` (được chuẩn hóa thành `TIMEOUT` trong observability) |
 
 Hai exception chính đều expose:
 - `getStatusCode()`
