@@ -86,7 +86,6 @@ public interface UserApiClient {
 
     @GET("/users/{id}")
     @ApiName("user.getById")
-    // aligns with read-timeout-ms: 5000
     @TimeoutMs(5000)
     Mono<UserDto> getUser(
             @PathVar("id") String id,
