@@ -3,59 +3,57 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.huynhngochuyhoang/reactive-http-client-starter.svg)](https://search.maven.org/artifact/io.github.huynhngochuyhoang/reactive-http-client-starter)
 [![CI](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml)
 
-Spring Boot starter để tạo **declarative reactive HTTP client** (annotation-driven WebFlux client), có sẵn:
-- mapping request/response
-- timeout
+A Spring Boot starter for building **declarative reactive HTTP clients** (annotation-driven WebFlux clients) with:
+- request/response mapping
+- timeout handling
 - error decoding
-- Resilience4j hooks (optional)
-- Micrometer observability (optional)
-- Correlation ID propagation
-
-English summary: a Spring Boot starter for building annotation-driven reactive HTTP clients with optional resilience and observability integration.
+- optional Resilience4j integration
+- optional Micrometer observability
+- correlation ID propagation
 
 ---
 
-## 1) Production readiness hiện tại
+## 1) Current production readiness
 
-### Đánh giá nhanh
+### Quick assessment
 
-**Mức hiện tại: có thể chạy production ổn cho phần lớn service nội bộ nếu hoàn thiện thêm lớp vận hành/bảo mật ở ứng dụng; chưa full enterprise-ready out-of-the-box.**
+**Current level: production-capable for many internal services when app-level operational/security hardening is added; not fully enterprise-ready out of the box.**
 
-| Nhóm | Trạng thái | Ghi chú |
+| Area | Status | Notes |
 |---|---|---|
-| Core client proxy + annotation model | ✅ Tốt | Cơ chế proxy + metadata cache rõ ràng, đã có test |
-| Timeout / error contract | ✅ Tốt | Có phân loại lỗi + timeout precedence |
-| Resilience (CB/Retry/Bulkhead) | ✅ Tốt (opt-in) | Tích hợp được, retry mặc định GET/HEAD |
-| Metrics/tracing hooks | ✅ Tốt (opt-in) | Có Micrometer observer + tag chuẩn |
-| Security/auth chuẩn enterprise | ⚠️ Thiếu một phần | Chưa có built-in auth/token refresh/mTLS/proxy policy ở mức starter API |
-| Operational hardening (governance) | ⚠️ Thiếu một phần | Chưa có readiness checklist/guardrails mạnh cho production |
-| Integration/contract testing mẫu | ⚠️ Thiếu | Chủ yếu unit test trong starter |
+| Core client proxy + annotation model | ✅ Good | Clear proxy/metadata-cache architecture with test coverage |
+| Timeout / error contract | ✅ Good | Error categorization and timeout precedence are defined |
+| Resilience (CB/Retry/Bulkhead) | ✅ Good (opt-in) | Integrated; retry defaults to GET/HEAD |
+| Metrics/tracing hooks | ✅ Good (opt-in) | Micrometer observer and stable tags are available |
+| Enterprise security/auth | ⚠️ Partial gap | No built-in auth/token refresh/mTLS/proxy policy layer |
+| Operational hardening (governance) | ⚠️ Partial gap | More production guardrails/runbook guidance needed |
+| Integration/contract testing sample | ⚠️ Gap | Starter currently focuses on unit-level test coverage |
 
-### Những điểm còn thiếu
+### Remaining gaps
 
-#### App cần tự hoàn thiện ngay khi dùng production
+#### Must be handled at the application level for production
 
-1. **Chuẩn hóa auth outbound**: cơ chế chung cho OAuth2/JWT/API key (inject header tự động thay vì service nào cũng tự làm)
-2. **Network hardening policy**: chuẩn cấu hình proxy, SSL/mTLS, connection pool tuning theo môi trường
-3. **PII-safe logging policy**: redaction/masking strategy khi bật logging body
-4. **Production runbook**: hướng dẫn rõ “khi lỗi tăng / timeout tăng / circuit open thì xử lý gì”
+1. **Outbound auth standardization**: shared OAuth2/JWT/API key strategy instead of per-service custom logic
+2. **Network hardening policy**: clear proxy, SSL/mTLS, and connection pool tuning rules by environment
+3. **PII-safe logging policy**: redaction/masking strategy when body logging is enabled
+4. **Production runbook**: clear response playbook for rising errors/timeouts/circuit-open events
 
-#### Nên bổ sung vào roadmap starter
+#### Recommended starter roadmap additions
 
-5. **Integration sample**: demo app + mock upstream để validate hành vi thực tế (retry, timeout, metrics)
+5. **Integration sample**: reference app + mock upstream for validating retry/timeout/metrics behavior
 
-> Lưu ý: Các mục trên không chặn việc dùng production, nhưng là phần cần hoàn thiện để vận hành lớn và an toàn hơn.
+> Note: these gaps do not block production usage, but they matter for large-scale and secure operations.
 
 ---
 
-## 2) Quick Start (nhìn vào là chạy được)
+## 2) Quick Start
 
-### 2.1 Yêu cầu
+### 2.1 Requirements
 - Java 17+
 - Spring Boot 3.x
 - Maven 3.8+
 
-### 2.2 Thêm dependency starter
+### 2.2 Add the starter dependency
 
 ```xml
 <dependency>
@@ -65,9 +63,9 @@ English summary: a Spring Boot starter for building annotation-driven reactive H
 </dependency>
 ```
 
-Trong app WebFlux, cần có `spring-boot-starter-webflux`.
+In WebFlux applications, also include `spring-boot-starter-webflux`.
 
-### 2.3 Enable scanning
+### 2.3 Enable client scanning
 
 ```java
 @SpringBootApplication
@@ -79,7 +77,7 @@ public class MyApp {
 }
 ```
 
-### 2.4 Khai báo client interface
+### 2.4 Define a client interface
 
 ```java
 @ReactiveHttpClient(name = "user-service")
@@ -101,7 +99,7 @@ public interface UserApiClient {
 }
 ```
 
-### 2.5 Cấu hình `application.yml`
+### 2.5 Configure `application.yml`
 
 ```yaml
 reactive:
@@ -122,7 +120,7 @@ reactive:
           timeout-ms: 0
 ```
 
-### 2.6 Inject và dùng
+### 2.6 Inject and use
 
 ```java
 @Service
@@ -139,49 +137,49 @@ public class UserService {
 
 ---
 
-## 3) Cách hoạt động cốt lõi
+## 3) Core call pipeline
 
-Mỗi call qua proxy đi theo pipeline:
+Each proxy invocation follows this pipeline:
 
-1. Parse metadata từ annotation method.
-2. Resolve tham số (`@PathVar`, `@QueryParam`, `@HeaderParam`, `@Body`).
-3. Gọi WebClient.
-4. Decode lỗi:
+1. Parse method metadata from annotations.
+2. Resolve arguments (`@PathVar`, `@QueryParam`, `@HeaderParam`, `@Body`).
+3. Execute WebClient request.
+4. Decode errors:
    - 4xx -> `HttpClientException`
    - 5xx -> `RemoteServiceException`
-5. Apply resilience (nếu bật): circuit-breaker -> retry -> bulkhead.
-6. Apply timeout (ưu tiên `@TimeoutMs` > `read-timeout-ms` > `resilience.timeout-ms`).
-7. Emit observability event (nếu có observer).
+5. Apply resilience (if enabled): circuit-breaker -> retry -> bulkhead.
+6. Apply timeout (priority: `@TimeoutMs` > `read-timeout-ms` > `resilience.timeout-ms`).
+7. Emit observability event (if observer is configured).
 
 ---
 
 ## 4) Annotation reference
 
-| Annotation | Dùng ở | Ý nghĩa |
+| Annotation | Target | Description |
 |---|---|---|
-| `@ReactiveHttpClient(name, baseUrl)` | Interface | Khai báo HTTP client |
+| `@ReactiveHttpClient(name, baseUrl)` | Interface | Declares an HTTP client |
 | `@GET/@POST/@PUT/@DELETE(path)` | Method | HTTP verb + path |
 | `@PathVar(name)` | Parameter | Path variable |
-| `@QueryParam(name)` | Parameter | Query param |
-| `@HeaderParam(name)` | Parameter | Header |
-| `@HeaderParam Map<String, String>` | Parameter | Inject nhiều header động |
+| `@QueryParam(name)` | Parameter | Query parameter |
+| `@HeaderParam(name)` | Parameter | Header parameter |
+| `@HeaderParam Map<String, String>` | Parameter | Dynamic header map |
 | `@Body` | Parameter | Request body |
-| `@ApiName("...")` | Method | Logical API name cho metrics/tracing |
-| `@TimeoutMs(ms)` | Method | Override timeout theo method (`0` = tắt timeout method) |
-| `@LogHttpExchange` | Method | Hook log request/response theo `HttpExchangeLogger` |
+| `@ApiName("...")` | Method | Logical API name for metrics/tracing |
+| `@TimeoutMs(ms)` | Method | Method-level timeout override (`0` disables timeout for that method) |
+| `@LogHttpExchange` | Method | Request/response log hook via `HttpExchangeLogger` |
 
 ---
 
 ## 5) Error handling contract
 
-| Trường hợp | Exception | Category |
+| Case | Exception | Category |
 |---|---|---|
 | 429 | `HttpClientException` | `RATE_LIMITED` |
-| 4xx (khác 429) | `HttpClientException` | `CLIENT_ERROR` |
+| Other 4xx | `HttpClientException` | `CLIENT_ERROR` |
 | 5xx | `RemoteServiceException` | `SERVER_ERROR` |
-| Timeout | `TimeoutException` | `—` (được chuẩn hóa thành `TIMEOUT` trong observability) |
+| Timeout | `TimeoutException` | `—` (normalized as `TIMEOUT` in observability) |
 
-Hai exception chính đều expose:
+Both main exception types expose:
 - `getStatusCode()`
 - `getResponseBody()`
 - `getErrorCategory()`
@@ -190,11 +188,12 @@ Hai exception chính đều expose:
 
 ## 6) Resilience4j integration
 
-Starter hỗ trợ integration theo client-level config. Retry mặc định chỉ áp dụng cho **GET/HEAD** (an toàn idempotency).
+The starter supports client-level Resilience4j configuration.
+By default, retry is applied only to **GET/HEAD** (idempotent-safe default).
 
-Nếu cần policy theo từng business method hoặc fallback method, dùng thêm annotation Resilience4j ở service layer.
+If you need per-business-method policies or fallback methods, add Resilience4j annotations at the service layer.
 
-### Dependency thường dùng ở consumer app
+### Common dependencies in consumer apps
 
 ```xml
 <dependency>
@@ -211,7 +210,7 @@ Nếu cần policy theo từng business method hoặc fallback method, dùng th�
 
 ## 7) Observability (Micrometer)
 
-Khi có `MeterRegistry`, starter tự ghi metric timer (mặc định: `http.client.requests`) với các tag chính:
+When a `MeterRegistry` is present, the starter records timer metrics (default: `http.client.requests`) with key tags:
 - `client.name`
 - `api.name`
 - `http.method`
@@ -219,9 +218,9 @@ Khi có `MeterRegistry`, starter tự ghi metric timer (mặc định: `http.cli
 - `outcome`
 - `exception`
 - `error.category`
-- `uri` (có thể tắt qua `include-url-path`)
+- `uri` (can be disabled via `include-url-path`)
 
-### Cấu hình observability
+### Observability configuration
 
 ```yaml
 reactive:
@@ -234,20 +233,20 @@ reactive:
       log-response-body: false
 ```
 
-> Khuyến nghị production: chỉ bật body logging khi thật cần thiết và phải có masking PII.
+> Production recommendation: enable body logging only when truly required, and always apply PII masking.
 
 ---
 
-## 8) Checklist để dùng production an toàn
+## 8) Production safety checklist
 
-- [ ] Mọi client đều set `base-url`, timeout và resilience rõ ràng theo SLA.
-- [ ] Có policy retry hợp lệ (không retry write bừa bãi).
-- [ ] Có dashboard + alert (latency, error rate, circuit-open, timeout).
-- [ ] Có correlation-id end-to-end.
-- [ ] Có cơ chế auth outbound chuẩn hóa (token rotation/refresh).
-- [ ] Có quy định không log PII/secret.
-- [ ] Có integration test cho các case: timeout, 4xx/5xx, retry, fallback.
-- [ ] Có runbook vận hành khi upstream suy giảm.
+- [ ] Every client has explicit `base-url`, timeout, and resilience settings aligned with SLA.
+- [ ] Retry policy is valid (no unsafe retry for non-idempotent writes).
+- [ ] Dashboard + alerts are in place (latency, error rate, circuit-open, timeout).
+- [ ] Correlation ID is propagated end-to-end.
+- [ ] Outbound auth is standardized (including token rotation/refresh strategy).
+- [ ] No PII/secret leakage in logs.
+- [ ] Integration tests cover timeout, 4xx/5xx, retry, and fallback scenarios.
+- [ ] Operational runbook exists for upstream degradation incidents.
 
 ---
 
