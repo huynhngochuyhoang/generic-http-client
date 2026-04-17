@@ -3,7 +3,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.huynhngochuyhoang/reactive-http-client-starter.svg)](https://search.maven.org/artifact/io.github.huynhngochuyhoang/reactive-http-client-starter)
 [![CI](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/huynhngochuyhoang/reactive-http-client/actions/workflows/ci.yml)
 
-Spring Boot starter để tạo **declarative reactive HTTP client** (WebFlux) theo kiểu annotation, có sẵn:
+Spring Boot starter để tạo **declarative reactive HTTP client** (annotation-driven WebFlux client), có sẵn:
 - mapping request/response
 - timeout
 - error decoding
@@ -80,7 +80,7 @@ public interface UserApiClient {
 
     @GET("/users/{id}")
     @ApiName("user.getById")
-    @TimeoutMs(2000)
+    @TimeoutMs(5000)
     Mono<UserDto> getUser(
             @PathVar("id") String id,
             @QueryParam("expand") String expand
