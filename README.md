@@ -17,7 +17,8 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 
 ### Quick assessment
 
-**Current level: production-capable for many internal services when app-level operational/security hardening is added; not fully enterprise-ready out of the box.**
+**Current level:** production-capable for many internal services.  
+**Condition:** add app-level operational and security hardening; it is not fully enterprise-ready out of the box.
 
 | Area | Status | Notes |
 |---|---|---|
@@ -85,6 +86,7 @@ public interface UserApiClient {
 
     @GET("/users/{id}")
     @ApiName("user.getById")
+    // aligns with read-timeout-ms: 5000
     @TimeoutMs(5000)
     Mono<UserDto> getUser(
             @PathVar("id") String id,
