@@ -18,8 +18,8 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 
 ### Quick assessment
 
-**Current level:** production-capable for many internal services.  
-**Condition:** add app-level operational and security hardening; it is not fully enterprise-ready out of the box.
+**Current level:** production-ready for most service-to-service workloads.  
+**Condition:** core transport/auth/resilience capabilities are built in; teams still need app-level governance and runbooks.
 
 | Area | Status | Notes |
 |---|---|---|
@@ -27,8 +27,9 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 | Timeout / error contract | ✅ Good | Error categorization and timeout precedence are defined |
 | Resilience (CB/Retry/Bulkhead) | ✅ Good (opt-in) | Integrated; retry defaults to GET/HEAD |
 | Metrics/tracing hooks | ✅ Good (opt-in) | Micrometer observer and stable tags are available |
-| Enterprise security/auth | ⚠️ Partial gap | Built-in outbound auth + token refresh helper available; mTLS/proxy policy remains app-level |
-| Operational hardening (governance) | ⚠️ Partial gap | More production guardrails/runbook guidance needed |
+| Enterprise security/auth | ✅ Good (extensible) | Per-client `AuthProvider` and built-in `RefreshingBearerAuthProvider` for token cache/refresh |
+| Network policy and pooling | ✅ Good | Global `reactive.http.network` defaults and shared connection-pool controls are supported |
+| Operational hardening (governance) | ⚠️ Partial gap | More production guardrails/runbook guidance still needed |
 | Integration/contract testing sample | ⚠️ Gap | Starter currently focuses on unit-level test coverage |
 
 ### Remaining gaps
@@ -36,7 +37,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 #### Must be handled at the application level for production
 
 1. **Outbound auth standardization**: use built-in `RefreshingBearerAuthProvider` for bearer token rotation/refresh, or custom `AuthProvider` for OAuth2/JWT/API key/HMAC
-2. **Network hardening policy**: clear proxy, SSL/mTLS, and connection pool tuning rules by environment
+2. **Environment network hardening policy**: enforce proxy and SSL/mTLS policies by environment (starter now provides global timeout/pool knobs)
 3. **PII-safe logging policy**: redaction/masking strategy when body logging is enabled
 4. **Production runbook**: clear response playbook for rising errors/timeouts/circuit-open events
 
@@ -61,7 +62,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.1.0</version>
+  <version>1.2.0</version>
 </dependency>
 ```
 
