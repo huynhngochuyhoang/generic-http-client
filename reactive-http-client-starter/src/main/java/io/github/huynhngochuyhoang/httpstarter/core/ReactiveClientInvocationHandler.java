@@ -8,6 +8,8 @@ import io.github.huynhngochuyhoang.httpstarter.exception.HttpClientException;
 import io.github.huynhngochuyhoang.httpstarter.exception.RemoteServiceException;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.codec.DecodingException;
@@ -26,10 +28,13 @@ import reactor.core.publisher.SignalType;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -62,16 +67,13 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private final Map<Class<? extends HttpExchangeLogger>, HttpExchangeLogger> loggerCache = new ConcurrentHashMap<>();
     private final java.util.Set<String> resilienceWarningKeys = ConcurrentHashMap.newKeySet();
 
-    // Resilience4j registries – may be null when resilience4j is not on the classpath
-    private final Object circuitBreakerRegistry;
-    private final Object retryRegistry;
-    private final Object bulkheadRegistry;
+    private final ResilienceOperatorApplier resilienceOperatorApplier;
+    private final ObjectMapper objectMapper;
 
     // Observability – resolved lazily on first request to avoid ordering issues during
     // context initialization (the observer bean may not yet exist when this handler is constructed)
     private final ReactiveHttpClientProperties.ObservabilityConfig observabilityConfig;
-    private volatile HttpClientObserver resolvedObserver;
-    private volatile boolean observerResolved = false;
+    private final org.springframework.beans.factory.ObjectProvider<HttpClientObserver> observerProvider;
 
     public ReactiveClientInvocationHandler(
             WebClient webClient,
@@ -81,26 +83,21 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             ReactiveHttpClientProperties.ClientConfig clientConfig,
             String clientName,
             ApplicationContext applicationContext,
-            Object circuitBreakerRegistry,
-            Object retryRegistry,
-            Object bulkheadRegistry,
-            HttpClientObserver httpClientObserver,
+            ResilienceOperatorApplier resilienceOperatorApplier,
+            ObjectMapper objectMapper,
             ReactiveHttpClientProperties.ObservabilityConfig observabilityConfig) {
         this.webClient = webClient;
         this.metadataCache = metadataCache;
         this.argumentResolver = argumentResolver;
         this.errorDecoder = errorDecoder;
-        this.clientConfig = clientConfig;
+        this.clientConfig = Objects.requireNonNull(clientConfig, "clientConfig must not be null");
         this.clientName = clientName;
         this.applicationContext = applicationContext;
-        this.circuitBreakerRegistry = circuitBreakerRegistry;
-        this.retryRegistry = retryRegistry;
-        this.bulkheadRegistry = bulkheadRegistry;
-        // Pre-populate if the observer is already available at construction time
-        if (httpClientObserver != null) {
-            this.resolvedObserver = httpClientObserver;
-            this.observerResolved = true;
-        }
+        this.resilienceOperatorApplier = resilienceOperatorApplier != null
+                ? resilienceOperatorApplier
+                : new NoopResilienceOperatorApplier();
+        this.objectMapper = objectMapper;
+        this.observerProvider = applicationContext.getBeanProvider(HttpClientObserver.class);
         this.observabilityConfig = observabilityConfig;
     }
 
@@ -111,17 +108,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      * constructed are still picked up.
      */
     private HttpClientObserver getObserver() {
-        if (!observerResolved) {
-            synchronized (this) {
-                if (!observerResolved) {
-                    resolvedObserver = applicationContext
-                            .getBeanProvider(HttpClientObserver.class)
-                            .getIfAvailable();
-                    observerResolved = true;
-                }
-            }
-        }
-        return resolvedObserver;
+        HttpClientObserver observer = observerProvider.getIfAvailable();
+        return observer != null ? observer : null;
     }
 
     @Override
@@ -162,19 +150,23 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             requestSpec = requestSpec.accept(MediaType.APPLICATION_JSON);
         }
 
-        if (resolved.body() != null) {
-            requestSpec = requestSpec.attribute(AuthRequest.REQUEST_BODY_ATTRIBUTE, resolved.body());
+        SerializedRequestBody serializedRequestBody = serializeRequestBodyForAuth(resolved.body(), hasContentTypeHeader);
+        if (serializedRequestBody.originalBody() != null) {
+            requestSpec = requestSpec.attribute(AuthRequest.REQUEST_BODY_ATTRIBUTE, serializedRequestBody.originalBody());
+        }
+        if (serializedRequestBody.rawBody() != null) {
+            requestSpec = requestSpec.attribute(AuthRequest.REQUEST_RAW_BODY_ATTRIBUTE, serializedRequestBody.rawBody());
         }
 
         resolved.headers().forEach(requestSpec::header);
 
         WebClient.RequestHeadersSpec<?> requestHeadersSpec;
-        if (resolved.body() != null) {
+        if (serializedRequestBody.originalBody() != null) {
             WebClient.RequestBodySpec requestWithBodySpec = requestSpec;
             if (!hasContentTypeHeader) {
                 requestWithBodySpec = requestWithBodySpec.contentType(MediaType.APPLICATION_JSON);
             }
-            requestHeadersSpec = requestWithBodySpec.bodyValue(resolved.body());
+            requestHeadersSpec = requestWithBodySpec.bodyValue(serializedRequestBody.bodyToWrite());
         } else {
             requestHeadersSpec = requestSpec;
         }
@@ -269,6 +261,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (responseType == null || Void.class.equals(responseType)) {
             return response.bodyToMono(Void.class);
         }
+        if (responseType == String.class) {
+            return response.bodyToMono(String.class);
+        }
+        if (responseType == byte[].class) {
+            return response.bodyToMono(byte[].class);
+        }
         return response.bodyToMono(ParameterizedTypeReference.forType(responseType));
     }
 
@@ -280,28 +278,26 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private Mono<?> applyResilienceMono(Mono<?> mono, MethodMetadata meta) {
-        if (clientConfig == null) return mono;
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return mono;
 
         if (isRetryableMethod(meta.getHttpMethod())) {
-            mono = applyRetryMono(mono, resilience);
+            mono = applyRetryMono(mono, resilience.getRetry());
         }
-        mono = applyCircuitBreakerMono(mono, resilience);
-        mono = applyBulkheadMono(mono, resilience);
+        mono = applyCircuitBreakerMono(mono, resilience.getCircuitBreaker());
+        mono = applyBulkheadMono(mono, resilience.getBulkhead());
         return mono;
     }
 
     private Flux<?> applyResilienceFlux(Flux<?> flux, MethodMetadata meta) {
-        if (clientConfig == null) return flux;
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return flux;
 
         if (isRetryableMethod(meta.getHttpMethod())) {
-            flux = applyRetryFlux(flux, resilience);
+            flux = applyRetryFlux(flux, resilience.getRetry());
         }
-        flux = applyCircuitBreakerFlux(flux, resilience);
-        flux = applyBulkheadFlux(flux, resilience);
+        flux = applyCircuitBreakerFlux(flux, resilience.getCircuitBreaker());
+        flux = applyBulkheadFlux(flux, resilience.getBulkhead());
         return flux;
     }
 
@@ -332,11 +328,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private long resolveTimeoutMs(MethodMetadata meta) {
         // Method-level override has highest priority.
         // A method annotation value of 0 explicitly disables timeout for that API method.
-        if (meta.getTimeoutMs() >= 0) {
+        if (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET) {
             return meta.getTimeoutMs();
-        }
-        if (clientConfig == null) {
-            return 0;
         }
         // Fall back to resilience timeout when method timeout is not configured.
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
@@ -346,162 +339,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return 0;
     }
 
-    @SuppressWarnings("unchecked")
-    private Mono<?> applyCircuitBreakerMono(Mono<?> mono, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (circuitBreakerRegistry == null) return mono;
-        try {
-            Class<?> cbRegistryClass = Class.forName(
-                    "io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry");
-            Class<?> cbClass = Class.forName(
-                    "io.github.resilience4j.circuitbreaker.CircuitBreaker");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator");
-
-            Object cb = cbRegistryClass
-                    .getMethod("circuitBreaker", String.class)
-                    .invoke(circuitBreakerRegistry, cfg.getCircuitBreaker());
-            Object operator = operatorClass
-                    .getMethod("of", cbClass)
-                    .invoke(null, cb);
-            return (Mono<?>) Mono.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(mono, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("circuitBreaker", cfg.getCircuitBreaker(), e);
-            return mono;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Flux<?> applyCircuitBreakerFlux(Flux<?> flux, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (circuitBreakerRegistry == null) return flux;
-        try {
-            Class<?> cbRegistryClass = Class.forName(
-                    "io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry");
-            Class<?> cbClass = Class.forName(
-                    "io.github.resilience4j.circuitbreaker.CircuitBreaker");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator");
-
-            Object cb = cbRegistryClass
-                    .getMethod("circuitBreaker", String.class)
-                    .invoke(circuitBreakerRegistry, cfg.getCircuitBreaker());
-            Object operator = operatorClass
-                    .getMethod("of", cbClass)
-                    .invoke(null, cb);
-            return (Flux<?>) Flux.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(flux, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("circuitBreaker", cfg.getCircuitBreaker(), e);
-            return flux;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Mono<?> applyRetryMono(Mono<?> mono, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (retryRegistry == null) return mono;
-        try {
-            Class<?> retryRegistryClass = Class.forName(
-                    "io.github.resilience4j.retry.RetryRegistry");
-            Class<?> retryClass = Class.forName(
-                    "io.github.resilience4j.retry.Retry");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.retry.RetryOperator");
-
-            Object retry = retryRegistryClass
-                    .getMethod("retry", String.class)
-                    .invoke(retryRegistry, cfg.getRetry());
-            Object operator = operatorClass
-                    .getMethod("of", retryClass)
-                    .invoke(null, retry);
-            return (Mono<?>) Mono.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(mono, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("retry", cfg.getRetry(), e);
-            return mono;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Flux<?> applyRetryFlux(Flux<?> flux, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (retryRegistry == null) return flux;
-        try {
-            Class<?> retryRegistryClass = Class.forName(
-                    "io.github.resilience4j.retry.RetryRegistry");
-            Class<?> retryClass = Class.forName(
-                    "io.github.resilience4j.retry.Retry");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.retry.RetryOperator");
-
-            Object retry = retryRegistryClass
-                    .getMethod("retry", String.class)
-                    .invoke(retryRegistry, cfg.getRetry());
-            Object operator = operatorClass
-                    .getMethod("of", retryClass)
-                    .invoke(null, retry);
-            return (Flux<?>) Flux.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(flux, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("retry", cfg.getRetry(), e);
-            return flux;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Mono<?> applyBulkheadMono(Mono<?> mono, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (bulkheadRegistry == null) return mono;
-        try {
-            Class<?> bhRegistryClass = Class.forName(
-                    "io.github.resilience4j.bulkhead.BulkheadRegistry");
-            Class<?> bhClass = Class.forName(
-                    "io.github.resilience4j.bulkhead.Bulkhead");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.bulkhead.operator.BulkheadOperator");
-
-            Object bh = bhRegistryClass
-                    .getMethod("bulkhead", String.class)
-                    .invoke(bulkheadRegistry, cfg.getBulkhead());
-            Object operator = operatorClass
-                    .getMethod("of", bhClass)
-                    .invoke(null, bh);
-            return (Mono<?>) Mono.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(mono, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("bulkhead", cfg.getBulkhead(), e);
-            return mono;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Flux<?> applyBulkheadFlux(Flux<?> flux, ReactiveHttpClientProperties.ResilienceConfig cfg) {
-        if (bulkheadRegistry == null) return flux;
-        try {
-            Class<?> bhRegistryClass = Class.forName(
-                    "io.github.resilience4j.bulkhead.BulkheadRegistry");
-            Class<?> bhClass = Class.forName(
-                    "io.github.resilience4j.bulkhead.Bulkhead");
-            Class<?> operatorClass = Class.forName(
-                    "io.github.resilience4j.reactor.bulkhead.operator.BulkheadOperator");
-
-            Object bh = bhRegistryClass
-                    .getMethod("bulkhead", String.class)
-                    .invoke(bulkheadRegistry, cfg.getBulkhead());
-            Object operator = operatorClass
-                    .getMethod("of", bhClass)
-                    .invoke(null, bh);
-            return (Flux<?>) Flux.class
-                    .getMethod("transformDeferred", java.util.function.Function.class)
-                    .invoke(flux, operator);
-        } catch (Exception e) {
-            logResilienceOperatorFailure("bulkhead", cfg.getBulkhead(), e);
-            return flux;
-        }
-    }
-
     private Mono<? extends Throwable> decodeErrorResponse(ClientResponse response) {
         return errorDecoder.decode(response)
                 .onErrorResume(decodeError -> response.releaseBody()
@@ -509,12 +346,97 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                         .then(Mono.error(decodeError)));
     }
 
+    @SuppressWarnings("unchecked")
+    private Mono<?> applyCircuitBreakerMono(Mono<?> mono, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyCircuitBreaker((Mono<Object>) mono, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("circuitBreaker", instanceName, e);
+            return mono;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Flux<?> applyCircuitBreakerFlux(Flux<?> flux, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyCircuitBreaker((Flux<Object>) flux, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("circuitBreaker", instanceName, e);
+            return flux;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Mono<?> applyRetryMono(Mono<?> mono, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyRetry((Mono<Object>) mono, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("retry", instanceName, e);
+            return mono;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Flux<?> applyRetryFlux(Flux<?> flux, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyRetry((Flux<Object>) flux, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("retry", instanceName, e);
+            return flux;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Mono<?> applyBulkheadMono(Mono<?> mono, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyBulkhead((Mono<Object>) mono, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("bulkhead", instanceName, e);
+            return mono;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Flux<?> applyBulkheadFlux(Flux<?> flux, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyBulkhead((Flux<Object>) flux, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("bulkhead", instanceName, e);
+            return flux;
+        }
+    }
+
     private boolean hasHeaderIgnoreCase(Map<String, String> headers, String headerName) {
         return headers.keySet().stream().anyMatch(name -> headerName.equalsIgnoreCase(name));
     }
 
     private boolean isRetryableMethod(String method) {
-        return "GET".equals(method) || "HEAD".equals(method);
+        ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
+        if (resilience == null || resilience.getRetryMethods() == null || resilience.getRetryMethods().isEmpty()) {
+            return false;
+        }
+        return method != null && resilience.getRetryMethods().contains(method.toUpperCase(Locale.ROOT));
+    }
+
+    private SerializedRequestBody serializeRequestBodyForAuth(Object body, boolean hasContentTypeHeader) {
+        if (body == null) {
+            return new SerializedRequestBody(null, null, null);
+        }
+        if (body instanceof byte[] bytes) {
+            return new SerializedRequestBody(body, bytes, bytes);
+        }
+        if (body instanceof String text) {
+            return new SerializedRequestBody(body, text, text.getBytes(StandardCharsets.UTF_8));
+        }
+        if (hasContentTypeHeader || objectMapper == null) {
+            return new SerializedRequestBody(body, body, null);
+        }
+        try {
+            byte[] json = objectMapper.writeValueAsBytes(body);
+            return new SerializedRequestBody(body, json, json);
+        } catch (JsonProcessingException e) {
+            throw new AuthProviderException(clientName, e);
+        }
     }
 
     private Throwable terminalErrorForSignal(SignalType signalType, Throwable terminalError) {
@@ -682,5 +604,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         return false;
     }
+
+    private record SerializedRequestBody(Object originalBody, Object bodyToWrite, byte[] rawBody) {}
 
 }

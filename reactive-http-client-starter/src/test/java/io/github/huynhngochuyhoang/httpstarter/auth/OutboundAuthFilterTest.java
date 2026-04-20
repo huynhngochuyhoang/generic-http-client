@@ -99,6 +99,28 @@ class OutboundAuthFilterTest {
     }
 
     @Test
+    void shouldPreferRawBodyBytesForAuthSigningWhenPresent() {
+        AtomicReference<Object> capturedBody = new AtomicReference<>();
+        AuthProvider authProvider = request -> {
+            capturedBody.set(request.requestBody());
+            return Mono.just(AuthContext.empty());
+        };
+
+        OutboundAuthFilter filter = new OutboundAuthFilter("hmac-service", authProvider);
+        byte[] raw = "{\"id\":1001}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        ClientRequest request = ClientRequest.create(HttpMethod.POST, URI.create("https://api.test.local/payments"))
+                .attribute(AuthRequest.REQUEST_BODY_ATTRIBUTE, java.util.Map.of("id", 1001))
+                .attribute(AuthRequest.REQUEST_RAW_BODY_ATTRIBUTE, raw)
+                .build();
+
+        StepVerifier.create(filter.filter(request, req -> Mono.just(ClientResponse.create(HttpStatus.OK).build())))
+                .expectNextCount(1)
+                .verifyComplete();
+        assertTrue(capturedBody.get() instanceof byte[]);
+        org.junit.jupiter.api.Assertions.assertArrayEquals(raw, (byte[]) capturedBody.get());
+    }
+
+    @Test
     void shouldWrapAuthProviderFailure() {
         AuthProvider authProvider = request -> Mono.error(new IllegalStateException("token endpoint down"));
         OutboundAuthFilter filter = new OutboundAuthFilter("user-service", authProvider);

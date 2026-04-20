@@ -27,7 +27,9 @@ public class OutboundAuthFilter implements ExchangeFilterFunction {
     @Override
     public Mono<org.springframework.web.reactive.function.client.ClientResponse> filter(
             ClientRequest request, ExchangeFunction next) {
-        Object requestBody = request.attribute(AuthRequest.REQUEST_BODY_ATTRIBUTE).orElse(null);
+        Object requestBody = request.attribute(AuthRequest.REQUEST_RAW_BODY_ATTRIBUTE)
+                .or(() -> request.attribute(AuthRequest.REQUEST_BODY_ATTRIBUTE))
+                .orElse(null);
         AuthRequest authRequest = new AuthRequest(clientName, request, requestBody);
         return resolveAuthorizedRequest(request, authRequest)
                 .flatMap(next::exchange)
