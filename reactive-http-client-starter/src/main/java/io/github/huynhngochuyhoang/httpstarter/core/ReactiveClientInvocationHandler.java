@@ -600,10 +600,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 return ErrorCategory.SERVER_ERROR;
             }
         }
-        if (error != null) {
-            return ErrorCategory.UNKNOWN;
-        }
-        return null;
+        return error != null ? ErrorCategory.UNKNOWN : null;
     }
 
     private boolean isResponseDecodeError(HttpStatusCode statusCode, Throwable error) {
