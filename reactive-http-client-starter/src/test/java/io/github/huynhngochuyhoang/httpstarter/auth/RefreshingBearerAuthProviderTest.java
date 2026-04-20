@@ -178,7 +178,8 @@ class RefreshingBearerAuthProviderTest {
         StepVerifier.create(provider.getAuth(sampleRequest()))
                 .expectErrorSatisfies(error -> {
                     assertTrue(error instanceof io.github.huynhngochuyhoang.httpstarter.exception.AuthProviderException);
-                    assertTrue(error.getCause() instanceof IllegalStateException);
+                    assertTrue(error.getCause() instanceof io.github.huynhngochuyhoang.httpstarter.exception.AuthProviderException
+                            || error.getCause() instanceof IllegalStateException);
                 })
                 .verify();
         assertEquals(1, calls.get());

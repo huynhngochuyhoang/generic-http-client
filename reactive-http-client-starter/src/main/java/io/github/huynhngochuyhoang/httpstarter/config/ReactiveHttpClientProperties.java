@@ -34,6 +34,7 @@ import java.util.Set;
  *           enabled: false
  *           circuit-breaker: default
  *           retry: default
+ *           retry-methods: [GET, HEAD]
  *           bulkhead: default
  *           timeout-ms: 0
  * }</pre>

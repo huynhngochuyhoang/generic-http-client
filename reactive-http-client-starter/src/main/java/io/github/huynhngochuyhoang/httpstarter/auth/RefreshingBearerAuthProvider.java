@@ -120,6 +120,9 @@ public final class RefreshingBearerAuthProvider implements InvalidatableAuthProv
                             clientName,
                             new IllegalStateException("AccessTokenProvider returned empty token"))))
                     .map(token -> validateAndNormalize(clientName, token))
+                    .onErrorMap(error -> error instanceof AuthProviderException
+                            ? error
+                            : new AuthProviderException(clientName, error))
                     .doOnNext(token -> {
                         cachedToken = token;
                         lastRefreshFailureAt = null;
