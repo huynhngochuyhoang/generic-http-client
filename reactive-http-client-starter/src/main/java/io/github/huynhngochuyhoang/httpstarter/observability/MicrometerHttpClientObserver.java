@@ -33,10 +33,11 @@ import java.util.concurrent.TimeUnit;
  *       {@code reactive.http.observability.include-url-path=true} (default); {@code NONE} otherwise.</li>
  *   <li><b>http.status_code</b> – numeric status (200, 404, …) or {@code CLIENT_ERROR} / {@code SERVER_ERROR}
  *       when the response was never received.</li>
- *   <li><b>outcome</b> – one of SUCCESS, CLIENT_ERROR, SERVER_ERROR, UNKNOWN.</li>
+ *   <li><b>outcome</b> – one of SUCCESS, REDIRECTION, CLIENT_ERROR, SERVER_ERROR, UNKNOWN.</li>
  *   <li><b>exception</b> – simple class name of the error, or {@code none}.</li>
  *   <li><b>error.category</b> – one of {@code RATE_LIMITED}, {@code CLIENT_ERROR}, {@code SERVER_ERROR},
- *       {@code TIMEOUT}, {@code CANCELLED}, {@code AUTH_PROVIDER_ERROR}, {@code UNKNOWN},
+ *       {@code TIMEOUT}, {@code CANCELLED}, {@code AUTH_PROVIDER_ERROR},
+ *       {@code RESPONSE_DECODE_ERROR}, {@code UNKNOWN},
  *       or {@code none} for successful calls.</li>
  * </ul>
  *

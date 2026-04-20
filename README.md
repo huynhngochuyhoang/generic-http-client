@@ -235,6 +235,7 @@ Each proxy invocation follows this pipeline:
 | 429 | `HttpClientException` | `RATE_LIMITED` |
 | Other 4xx | `HttpClientException` | `CLIENT_ERROR` |
 | 5xx | `RemoteServiceException` | `SERVER_ERROR` |
+| 2xx but response decode/deserialization fails (`bodyToMono`/`bodyToFlux`) | Codec/decoding error | `RESPONSE_DECODE_ERROR` (observability) |
 | Timeout | `TimeoutException` | `—` (normalized as `TIMEOUT` in observability) |
 
 Both main exception types expose:

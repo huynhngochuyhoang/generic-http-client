@@ -11,9 +11,13 @@ import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.codec.DecodingException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -92,6 +96,71 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
         assertEquals(ErrorCategory.AUTH_PROVIDER_ERROR, event.getErrorCategory());
     }
 
+    @Test
+    void shouldObserveResponseDecodeErrorCategoryWhenBodyToMonoFails() {
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .body("\"VGVzdA==\"")
+                .build();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.just(response))
+                .build();
+
+        AtomicReference<HttpClientObserverEvent> observed = new AtomicReference<>();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, 5000, observed::set);
+
+        StepVerifier.create(invokeMono(handler, MonoIntegerClient.class, "callInt"))
+                .expectError()
+                .verify();
+
+        HttpClientObserverEvent event = observed.get();
+        assertNotNull(event);
+        assertEquals(ErrorCategory.RESPONSE_DECODE_ERROR, event.getErrorCategory());
+    }
+
+    @Test
+    void shouldObserveResponseDecodeErrorCategoryWhenBodyToFluxFails() {
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .body("[\"VGVzdA==\"]")
+                .build();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.just(response))
+                .build();
+
+        AtomicReference<HttpClientObserverEvent> observed = new AtomicReference<>();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, 5000, observed::set);
+
+        StepVerifier.create(invokeFlux(handler, FluxIntegerClient.class, "callIntFlux"))
+                .expectError()
+                .verify();
+
+        HttpClientObserverEvent event = observed.get();
+        assertNotNull(event);
+        assertEquals(ErrorCategory.RESPONSE_DECODE_ERROR, event.getErrorCategory());
+    }
+
+    @Test
+    void shouldNotObserveResponseDecodeErrorCategoryWhenNoResponseStatusAvailable() {
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.error(new DecodingException("decode error without response status")))
+                .build();
+
+        AtomicReference<HttpClientObserverEvent> observed = new AtomicReference<>();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, 5000, observed::set);
+
+        StepVerifier.create(invoke(handler))
+                .expectError()
+                .verify();
+
+        HttpClientObserverEvent event = observed.get();
+        assertNotNull(event);
+        assertEquals(ErrorCategory.UNKNOWN, event.getErrorCategory());
+    }
+
     private static ReactiveClientInvocationHandler createHandler(
             WebClient webClient,
             int resilienceTimeoutMs,
@@ -120,16 +189,41 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
 
     @SuppressWarnings("unchecked")
     private static Mono<String> invoke(ReactiveClientInvocationHandler handler) {
+        return invokeMono(handler, TestClient.class, "call");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Mono<T> invokeMono(ReactiveClientInvocationHandler handler, Class<?> clientType, String methodName) {
         try {
-            Method method = TestClient.class.getMethod("call");
-            return (Mono<String>) handler.invoke(null, method, new Object[0]);
+            Method method = clientType.getMethod(methodName);
+            return (Mono<T>) handler.invoke(null, method, new Object[0]);
         } catch (Throwable t) {
             return Mono.error(t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Flux<T> invokeFlux(ReactiveClientInvocationHandler handler, Class<?> clientType, String methodName) {
+        try {
+            Method method = clientType.getMethod(methodName);
+            return (Flux<T>) handler.invoke(null, method, new Object[0]);
+        } catch (Throwable t) {
+            return Flux.error(t);
         }
     }
 
     interface TestClient {
         @GET("/users")
         Mono<String> call();
+    }
+
+    interface MonoIntegerClient {
+        @GET("/users")
+        Mono<Integer> callInt();
+    }
+
+    interface FluxIntegerClient {
+        @GET("/users")
+        Flux<Integer> callIntFlux();
     }
 }

@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- No notable changes yet.
+- Added `ErrorCategory.RESPONSE_DECODE_ERROR` to classify response decode/deserialization failures
+  during `bodyToMono` / `bodyToFlux` conversion (e.g. malformed JSON, mismatched type/shape, encoded payload).
+- Added test coverage for Mono/Flux decode-failure observability category emission.
 
 ---
 
