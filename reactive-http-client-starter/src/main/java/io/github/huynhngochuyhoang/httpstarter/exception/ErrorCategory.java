@@ -53,7 +53,13 @@ public enum ErrorCategory {
     AUTH_PROVIDER_ERROR,
 
     /**
-     * An unexpected or unclassified error occurred (e.g. network failure, codec error).
+     * The response payload could not be decoded/deserialized to the declared response type
+     * (e.g. malformed JSON, incompatible JSON shape/type, encoded/garbled payload).
+     */
+    RESPONSE_DECODE_ERROR,
+
+    /**
+     * An unexpected or unclassified error occurred (e.g. network failure).
      */
     UNKNOWN
 }
