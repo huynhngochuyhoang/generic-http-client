@@ -48,7 +48,7 @@ public class OutboundAuthFilter implements ExchangeFilterFunction {
             ClientRequest originalRequest,
             AuthRequest authRequest,
             ExchangeFunction next) {
-        if (!response.statusCode().valueEquals(401) || !(authProvider instanceof InvalidatableAuthProvider invalidatable)) {
+        if (response.statusCode().value() != 401 || !(authProvider instanceof InvalidatableAuthProvider invalidatable)) {
             return Mono.just(response);
         }
 
