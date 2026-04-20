@@ -99,7 +99,7 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
     void shouldObserveResponseDecodeErrorCategoryWhenBodyToMonoFails() {
         ClientResponse response = ClientResponse.create(HttpStatus.OK)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .body("{\"value\":1}")
+                .body("\"VGVzdA==\"")
                 .build();
         WebClient webClient = WebClient.builder()
                 .baseUrl("http://test.local")
@@ -122,7 +122,7 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
     void shouldObserveResponseDecodeErrorCategoryWhenBodyToFluxFails() {
         ClientResponse response = ClientResponse.create(HttpStatus.OK)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .body("[{\"value\":1}]")
+                .body("[\"VGVzdA==\"]")
                 .build();
         WebClient webClient = WebClient.builder()
                 .baseUrl("http://test.local")
