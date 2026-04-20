@@ -12,7 +12,7 @@
 
     <artifactId>reactive-http-client-starter</artifactId>
     <name>reactive-http-client-starter</name>
-    <description>Spring Boot Starter – Generic Reactive HTTP Client with Resilience4j</description>
+    <description>Spring Boot starter for declarative reactive HTTP clients with resilience, observability, and per-client auth strategy</description>
 
     <dependencies>
         <!-- Spring Boot Autoconfigure (no starters, lean) -->

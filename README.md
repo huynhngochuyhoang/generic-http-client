@@ -304,20 +304,7 @@ reactive:
 
 ---
 
-## 8) Production safety checklist
-
-- [ ] Every client has explicit `base-url` and resilience settings aligned with SLA; global network policy is set for connect/read/write timeout and pool.
-- [ ] Retry policy is valid (no unsafe retry for non-idempotent writes).
-- [ ] Dashboard + alerts are in place (latency, error rate, circuit-open, timeout).
-- [ ] Correlation ID is propagated end-to-end.
-- [x] Outbound auth is standardized (including token rotation/refresh strategy).
-- [ ] No PII/secret leakage in logs.
-- [ ] Integration tests cover timeout, 4xx/5xx, retry, and fallback scenarios.
-- [ ] Operational runbook exists for upstream degradation incidents.
-
----
-
-## 9) Build & test
+## 8) Build & test
 
 ```bash
 mvn -B -ntp verify
@@ -325,7 +312,7 @@ mvn -B -ntp verify
 
 ---
 
-## 10) Module structure
+## 9) Module structure
 
 ```text
 reactive-http-client/
@@ -345,6 +332,6 @@ reactive-http-client/
 
 ---
 
-## 11) License
+## 10) License
 
 Apache License 2.0.
