@@ -24,6 +24,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
+import reactor.netty.http.client.HttpClientRequest;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -170,6 +171,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         } else {
             requestHeadersSpec = requestSpec;
         }
+        requestHeadersSpec = applyMethodLevelReadTimeout(requestHeadersSpec, meta);
 
         AtomicReference<HttpStatusCode> responseStatus = new AtomicReference<>();
         AtomicReference<Map<String, List<String>>> responseHeaders = new AtomicReference<>(Map.of());
@@ -337,6 +339,20 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return resilience.getTimeoutMs();
         }
         return 0;
+    }
+
+    private WebClient.RequestHeadersSpec<?> applyMethodLevelReadTimeout(
+            WebClient.RequestHeadersSpec<?> requestHeadersSpec,
+            MethodMetadata meta) {
+        if (meta.getTimeoutMs() == MethodMetadata.TIMEOUT_NOT_SET) {
+            return requestHeadersSpec;
+        }
+        return requestHeadersSpec.httpRequest(httpRequest -> {
+            Object nativeRequest = httpRequest.getNativeRequest();
+            if (nativeRequest instanceof HttpClientRequest reactorRequest) {
+                reactorRequest.responseTimeout(meta.getTimeoutMs() > 0 ? Duration.ofMillis(meta.getTimeoutMs()) : null);
+            }
+        });
     }
 
     private Mono<? extends Throwable> decodeErrorResponse(ClientResponse response) {
