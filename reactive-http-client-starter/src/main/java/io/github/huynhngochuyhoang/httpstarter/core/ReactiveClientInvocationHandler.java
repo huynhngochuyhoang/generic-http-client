@@ -621,11 +621,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (error instanceof AuthProviderException) {
             return ErrorCategory.AUTH_PROVIDER_ERROR;
         }
-        if (isCausedBy(error, UnknownHostException.class)) {
-            return ErrorCategory.UNKNOWN_HOST;
-        }
         if (isCausedBy(error, ConnectException.class)) {
             return ErrorCategory.CONNECT_ERROR;
+        }
+        if (isCausedBy(error, UnknownHostException.class)) {
+            return ErrorCategory.UNKNOWN_HOST;
         }
         if (isResponseDecodeError(statusCode, error)) {
             return ErrorCategory.RESPONSE_DECODE_ERROR;
