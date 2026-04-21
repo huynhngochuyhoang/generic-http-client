@@ -24,17 +24,23 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
+import reactor.netty.http.client.HttpClientRequest;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -50,7 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Resolve arguments via {@link RequestArgumentResolver}</li>
  *   <li>Build and execute a WebClient request</li>
  *   <li>Decode errors with {@link DefaultErrorDecoder}</li>
- *   <li>Optionally apply Resilience4j operators (circuit-breaker, retry, bulkhead, timeout)</li>
+ *   <li>Optionally apply timeout + Resilience4j operators (retry, circuit-breaker, bulkhead)</li>
  * </ol>
  */
 public class ReactiveClientInvocationHandler implements InvocationHandler {
@@ -170,6 +176,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         } else {
             requestHeadersSpec = requestSpec;
         }
+        long timeoutMs = resolveTimeoutMs(meta);
+        requestHeadersSpec = applyRequestLevelResponseTimeout(requestHeadersSpec, meta, timeoutMs);
 
         AtomicReference<HttpStatusCode> responseStatus = new AtomicReference<>();
         AtomicReference<Map<String, List<String>>> responseHeaders = new AtomicReference<>(Map.of());
@@ -193,8 +201,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 responseHeaders.set(Map.of());
                 terminalError.set(null);
             });
+            flux = applyTimeoutFlux(flux, timeoutMs);
             flux = applyResilienceFlux(flux, meta);
-            flux = applyTimeoutFlux(flux, meta);
             if (exchangeLogger == null) {
                 logRequest(meta, start);
             }
@@ -229,8 +237,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             terminalError.set(null);
             terminalBody.set(null);
         });
+        mono = applyTimeoutMono(mono, timeoutMs);
         mono = applyResilienceMono(mono, meta);
-        mono = applyTimeoutMono(mono, meta);
         if (exchangeLogger == null) {
             logRequest(meta, start);
         }
@@ -304,9 +312,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     /**
      * Applies timeout when resolved timeout is {@code > 0}.
      * A resolved value of {@code 0} disables timeout (from method override or config).
+     * This operator is placed before retry so the timeout is enforced per attempt.
      */
-    private Mono<?> applyTimeoutMono(Mono<?> mono, MethodMetadata meta) {
-        long timeoutMs = resolveTimeoutMs(meta);
+    private Mono<?> applyTimeoutMono(Mono<?> mono, long timeoutMs) {
         if (timeoutMs <= 0) {
             return mono;
         }
@@ -316,9 +324,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     /**
      * Applies timeout when resolved timeout is {@code > 0}.
      * A resolved value of {@code 0} disables timeout (from method override or config).
+     * This operator is placed before retry so the timeout is enforced per attempt.
      */
-    private Flux<?> applyTimeoutFlux(Flux<?> flux, MethodMetadata meta) {
-        long timeoutMs = resolveTimeoutMs(meta);
+    private Flux<?> applyTimeoutFlux(Flux<?> flux, long timeoutMs) {
         if (timeoutMs <= 0) {
             return flux;
         }
@@ -337,6 +345,28 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return resilience.getTimeoutMs();
         }
         return 0;
+    }
+
+    private WebClient.RequestHeadersSpec<?> applyRequestLevelResponseTimeout(
+            WebClient.RequestHeadersSpec<?> requestHeadersSpec,
+            MethodMetadata meta,
+            long timeoutMs) {
+        if (!shouldOverrideRequestLevelResponseTimeout(meta, timeoutMs)) {
+            return requestHeadersSpec;
+        }
+        return requestHeadersSpec.httpRequest(httpRequest -> {
+            Object nativeRequest = httpRequest.getNativeRequest();
+            if (nativeRequest instanceof HttpClientRequest reactorRequest) {
+                reactorRequest.responseTimeout(timeoutMs > 0 ? Duration.ofMillis(timeoutMs) : null);
+            }
+        });
+    }
+
+    private boolean shouldOverrideRequestLevelResponseTimeout(MethodMetadata meta, long timeoutMs) {
+        if (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET) {
+            return true;
+        }
+        return timeoutMs > 0;
     }
 
     private Mono<? extends Throwable> decodeErrorResponse(ClientResponse response) {
@@ -594,6 +624,13 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (error instanceof AuthProviderException) {
             return ErrorCategory.AUTH_PROVIDER_ERROR;
         }
+        Throwable rootCause = getRootCause(error);
+        if (rootCause instanceof UnknownHostException) {
+            return ErrorCategory.UNKNOWN_HOST;
+        }
+        if (rootCause instanceof ConnectException) {
+            return ErrorCategory.CONNECT_ERROR;
+        }
         if (isResponseDecodeError(statusCode, error)) {
             return ErrorCategory.RESPONSE_DECODE_ERROR;
         }
@@ -624,6 +661,15 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             current = current.getCause();
         }
         return false;
+    }
+
+    private Throwable getRootCause(Throwable error) {
+        Throwable current = error;
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (current != null && current.getCause() != null && visited.add(current)) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private record SerializedRequestBody(Object originalBody, Object bodyToWrite, byte[] rawBody) {}

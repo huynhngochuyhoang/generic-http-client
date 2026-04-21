@@ -120,6 +120,9 @@ reactive:
           timeout-ms: 0
 ```
 
+`reactive.http.network.read-timeout-ms` configures Reactor Netty **response timeout** (request-level timeout), not channel idle-read timeout.
+Method-level `@TimeoutMs` still has highest precedence and can override/disable this timeout per API.
+
 ### 2.5.1 Outbound auth provider (per client)
 
 Each external client can map to its own `AuthProvider` bean via `auth-provider`.
@@ -201,8 +204,8 @@ Each proxy invocation follows this pipeline:
 4. Decode errors:
    - 4xx -> `HttpClientException`
    - 5xx -> `RemoteServiceException`
-5. Apply resilience (if enabled): retry -> circuit-breaker -> bulkhead.
-6. Apply request timeout (priority: `@TimeoutMs` > `resilience.timeout-ms`).
+5. Apply timeout (priority: `@TimeoutMs` > `resilience.timeout-ms`) per attempt.
+6. Apply resilience (if enabled): retry -> circuit-breaker -> bulkhead.
 7. Emit observability event (if observer is configured).
 
 ---
@@ -233,6 +236,8 @@ Each proxy invocation follows this pipeline:
 | 5xx | `RemoteServiceException` | `SERVER_ERROR` |
 | 2xx but response decode/deserialization fails (`bodyToMono`/`bodyToFlux`) | Codec/decoding error | `RESPONSE_DECODE_ERROR` (observability) |
 | Timeout | `TimeoutException` | `—` (normalized as `TIMEOUT` in observability) |
+| Connect failure | `ConnectException` | `CONNECT_ERROR` (observability) |
+| DNS resolution failure | `UnknownHostException` | `UNKNOWN_HOST` (observability) |
 
 Both main exception types expose:
 - `getStatusCode()`

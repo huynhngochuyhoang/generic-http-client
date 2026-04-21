@@ -7,7 +7,6 @@ import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperti
 import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelOption;
-import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -160,11 +159,11 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
         HttpClient httpClient = HttpClient.create(connectionProvider)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, resolvedNetworkConfig.getConnectTimeoutMs())
+                // Global default response timeout. Per-method @TimeoutMs is applied per request in invocation handler.
+                .responseTimeout(resolvedNetworkConfig.getReadTimeoutMs() > 0
+                        ? Duration.ofMillis(resolvedNetworkConfig.getReadTimeoutMs())
+                        : null)
                 .doOnConnected(connection -> {
-                    if (resolvedNetworkConfig.getReadTimeoutMs() > 0) {
-                        connection.addHandlerLast(new ReadTimeoutHandler(
-                                resolvedNetworkConfig.getReadTimeoutMs(), TimeUnit.MILLISECONDS));
-                    }
                     if (resolvedNetworkConfig.getWriteTimeoutMs() > 0) {
                         connection.addHandlerLast(new WriteTimeoutHandler(
                                 resolvedNetworkConfig.getWriteTimeoutMs(), TimeUnit.MILLISECONDS));
