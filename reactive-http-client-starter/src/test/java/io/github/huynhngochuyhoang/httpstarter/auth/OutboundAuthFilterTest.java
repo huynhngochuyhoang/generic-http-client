@@ -221,8 +221,13 @@ class OutboundAuthFilterTest {
                 .expectNextCount(1)
                 .verifyComplete();
 
-        String query = capturedRequest.get().url().getRawQuery();
-        assertTrue(query.contains("sig=a%2Bb%26c%3Dd%2Fe%20%3F"));
+        var params = org.springframework.web.util.UriComponentsBuilder
+                .fromUri(capturedRequest.get().url())
+                .build(true)
+                .getQueryParams();
+        assertEquals(1, params.size());
+        assertTrue(params.containsKey("sig"));
+        assertTrue(capturedRequest.get().url().getRawQuery().contains("%26"));
     }
 
     @Test

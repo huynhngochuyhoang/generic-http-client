@@ -39,32 +39,23 @@ public class DefaultErrorDecoder {
 
     private Mono<String> readBodyWithCap(ClientResponse response, int maxBytes) {
         return response.bodyToFlux(DataBuffer.class)
-                .handle(new java.util.function.BiConsumer<>() {
-                    private int remaining = maxBytes;
-                    private final ByteArrayOutputStream output = new ByteArrayOutputStream(maxBytes);
-
-                    @Override
-                    public void accept(DataBuffer dataBuffer, reactor.core.publisher.SynchronousSink<String> sink) {
-                        try {
-                            if (remaining > 0) {
-                                int toRead = Math.min(remaining, dataBuffer.readableByteCount());
-                                if (toRead > 0) {
-                                    byte[] chunk = new byte[toRead];
-                                    dataBuffer.read(chunk, 0, toRead);
-                                    output.write(chunk, 0, toRead);
-                                    remaining -= toRead;
-                                }
-                            }
-                            if (remaining <= 0) {
-                                sink.next(output.toString(StandardCharsets.UTF_8));
-                                sink.complete();
-                            }
-                        } finally {
-                            DataBufferUtils.release(dataBuffer);
-                        }
+                .map(dataBuffer -> {
+                    try {
+                        byte[] chunk = new byte[dataBuffer.readableByteCount()];
+                        dataBuffer.read(chunk);
+                        return chunk;
+                    } finally {
+                        DataBufferUtils.release(dataBuffer);
                     }
                 })
-                .next()
-                .switchIfEmpty(Mono.fromSupplier(() -> ""));
+                .reduce(new ByteArrayOutputStream(maxBytes), (output, chunk) -> {
+                    int remaining = maxBytes - output.size();
+                    if (remaining > 0) {
+                        output.write(chunk, 0, Math.min(remaining, chunk.length));
+                    }
+                    return output;
+                })
+                .map(output -> output.toString(StandardCharsets.UTF_8))
+                .defaultIfEmpty("");
     }
 }

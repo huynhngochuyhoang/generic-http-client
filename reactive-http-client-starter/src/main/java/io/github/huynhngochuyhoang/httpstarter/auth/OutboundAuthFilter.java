@@ -87,7 +87,7 @@ public class OutboundAuthFilter implements ExchangeFilterFunction {
                 uriBuilder.queryParam(name, value);
             }
         });
-        return uriBuilder.build().encode().toUri();
+        return uriBuilder.encode().build().toUri();
     }
 
     private void validateHeaderValue(String headerName, String value) {
