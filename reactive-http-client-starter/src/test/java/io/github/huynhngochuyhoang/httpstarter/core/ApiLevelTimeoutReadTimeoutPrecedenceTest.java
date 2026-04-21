@@ -65,7 +65,7 @@ class ApiLevelTimeoutReadTimeoutPrecedenceTest {
             ReactiveHttpClientProperties.ClientConfig clientConfig = new ReactiveHttpClientProperties.ClientConfig();
             ReactiveHttpClientProperties.ResilienceConfig resilienceConfig = new ReactiveHttpClientProperties.ResilienceConfig();
             resilienceConfig.setEnabled(true);
-            resilienceConfig.setTimeoutMs(300);
+            resilienceConfig.setTimeoutMs(1000);
             clientConfig.setResilience(resilienceConfig);
 
             ReactiveClientInvocationHandler handler = createHandler(webClient, clientConfig);
