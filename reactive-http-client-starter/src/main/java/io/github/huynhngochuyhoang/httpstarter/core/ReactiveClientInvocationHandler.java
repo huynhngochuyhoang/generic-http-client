@@ -33,11 +33,14 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -662,7 +665,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private Throwable getRootCause(Throwable error) {
         Throwable current = error;
-        while (current != null && current.getCause() != null) {
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        while (current != null && current.getCause() != null && visited.add(current)) {
             current = current.getCause();
         }
         return current;
