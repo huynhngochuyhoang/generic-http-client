@@ -204,8 +204,8 @@ Each proxy invocation follows this pipeline:
 4. Decode errors:
    - 4xx -> `HttpClientException`
    - 5xx -> `RemoteServiceException`
-5. Apply resilience (if enabled): retry -> circuit-breaker -> bulkhead.
-6. Apply request timeout (priority: `@TimeoutMs` > `resilience.timeout-ms`).
+5. Apply timeout (priority: `@TimeoutMs` > `resilience.timeout-ms`) per attempt.
+6. Apply resilience (if enabled): retry -> circuit-breaker -> bulkhead.
 7. Emit observability event (if observer is configured).
 
 ---
