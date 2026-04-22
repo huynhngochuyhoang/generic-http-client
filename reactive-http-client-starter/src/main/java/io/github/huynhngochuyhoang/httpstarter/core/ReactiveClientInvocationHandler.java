@@ -187,7 +187,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     } else {
                         requestHeadersSpec = preparedRequestSpec;
                     }
-                    return applyRequestLevelResponseTimeout(requestHeadersSpec);
+                    return applyRequestLevelResponseTimeout(requestHeadersSpec, timeoutMs);
                 });
 
         AtomicReference<HttpStatusCode> responseStatus = new AtomicReference<>();
@@ -216,7 +216,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     logRequest(meta, start.get());
                 }
             });
-            flux = applyTimeoutFlux(flux, timeoutMs);
             flux = applyResilienceFlux(flux, meta);
             if (exchangeLogger != null || observer != null) {
                 flux = flux
@@ -253,7 +252,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 logRequest(meta, start.get());
             }
         });
-        mono = applyTimeoutMono(mono, timeoutMs);
         mono = applyResilienceMono(mono, meta);
         if (exchangeLogger != null || observer != null) {
             mono = mono
@@ -322,30 +320,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return flux;
     }
 
-    /**
-     * Applies timeout when resolved timeout is {@code > 0}.
-     * A resolved value of {@code 0} disables timeout (from method override or config).
-     * This operator is placed before retry so the timeout is enforced per attempt.
-     */
-    private Mono<?> applyTimeoutMono(Mono<?> mono, long timeoutMs) {
-        if (timeoutMs <= 0) {
-            return mono;
-        }
-        return mono.timeout(Duration.ofMillis(timeoutMs));
-    }
-
-    /**
-     * Applies timeout when resolved timeout is {@code > 0}.
-     * A resolved value of {@code 0} disables timeout (from method override or config).
-     * This operator is placed before retry so the timeout is enforced per attempt.
-     */
-    private Flux<?> applyTimeoutFlux(Flux<?> flux, long timeoutMs) {
-        if (timeoutMs <= 0) {
-            return flux;
-        }
-        return flux.timeout(Duration.ofMillis(timeoutMs));
-    }
-
     private long resolveTimeoutMs(MethodMetadata meta) {
         // Method-level override has highest priority.
         // A method annotation value of 0 explicitly disables timeout for that API method.
@@ -361,12 +335,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private WebClient.RequestHeadersSpec<?> applyRequestLevelResponseTimeout(
-            WebClient.RequestHeadersSpec<?> requestHeadersSpec) {
+            WebClient.RequestHeadersSpec<?> requestHeadersSpec,
+            long timeoutMs) {
         return requestHeadersSpec.httpRequest(httpRequest -> {
             Object nativeRequest = httpRequest.getNativeRequest();
             if (nativeRequest instanceof HttpClientRequest reactorRequest) {
-                // Use Reactor timeout() as the single timeout mechanism and clear any connector-level Netty timeout.
-                reactorRequest.responseTimeout(null);
+                reactorRequest.responseTimeout(timeoutMs > 0 ? Duration.ofMillis(timeoutMs) : null);
             }
         });
     }

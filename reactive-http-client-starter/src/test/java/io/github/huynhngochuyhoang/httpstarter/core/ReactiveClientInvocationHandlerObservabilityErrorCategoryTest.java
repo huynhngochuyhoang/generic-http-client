@@ -33,7 +33,6 @@ import java.util.Map;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.time.Duration;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,16 +70,14 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
     void shouldObserveTimeoutCategoryWhenRequestTimesOut() {
         WebClient webClient = WebClient.builder()
                 .baseUrl("http://test.local")
-                .exchangeFunction(request -> Mono.never())
+                .exchangeFunction(request -> Mono.error(ReadTimeoutException.INSTANCE))
                 .build();
 
         AtomicReference<HttpClientObserverEvent> observed = new AtomicReference<>();
         ReactiveClientInvocationHandler handler = createHandler(webClient, 100, observed::set);
 
-        StepVerifier.withVirtualTime(() -> invoke(handler))
-                .expectSubscription()
-                .thenAwait(Duration.ofMillis(101))
-                .expectError(TimeoutException.class)
+        StepVerifier.create(invoke(handler))
+                .expectError(ReadTimeoutException.class)
                 .verify();
 
         HttpClientObserverEvent event = observed.get();

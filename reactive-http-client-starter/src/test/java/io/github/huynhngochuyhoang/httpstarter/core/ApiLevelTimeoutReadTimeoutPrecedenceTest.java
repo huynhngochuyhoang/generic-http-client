@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
@@ -15,10 +16,11 @@ import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
 
-import java.util.concurrent.TimeoutException;
+import io.netty.handler.timeout.ReadTimeoutException;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class ApiLevelTimeoutReadTimeoutPrecedenceTest {
 
@@ -81,7 +83,7 @@ class ApiLevelTimeoutReadTimeoutPrecedenceTest {
     }
 
     @Test
-    void shouldUseReactiveTimeoutExceptionWhenGlobalNettyReadTimeoutIsConfigured() {
+    void shouldUseNettyReadTimeoutExceptionWhenRequestLevelTimeoutIsConfigured() {
         DisposableServer server = HttpServer.create()
                 .port(0)
                 .route(routes -> routes.get("/slow", (request, response) ->
@@ -105,7 +107,10 @@ class ApiLevelTimeoutReadTimeoutPrecedenceTest {
             ReactiveClientInvocationHandler handler = createHandler(webClient, clientConfig);
 
             StepVerifier.create(invokeResilienceTimeoutApi(handler))
-                    .expectError(TimeoutException.class)
+                    .expectErrorSatisfies(ex -> {
+                        WebClientRequestException requestException = assertInstanceOf(WebClientRequestException.class, ex);
+                        assertInstanceOf(ReadTimeoutException.class, requestException.getCause());
+                    })
                     .verify();
         } finally {
             server.disposeNow();
