@@ -26,7 +26,6 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
 import io.netty.handler.timeout.ReadTimeoutException;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClientRequest;
@@ -239,14 +238,24 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     return capturedFlux;
                 })
                 .doOnError(terminalError::set)
-                .doFinally(signalType -> {
-                    Throwable error = terminalErrorForSignal(signalType, terminalError.get());
+                .doOnTerminate(() -> {
+                    Throwable error = terminalError.get();
                     if (exchangeLogger != null) {
                         logExchange(exchangeLogger, meta, resolved, start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, error, inboundHeadersRef.get());
                     }
                     if (observer != null) {
                         notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), error, null, attemptCount.get());
+                    }
+                })
+                .doOnCancel(() -> {
+                    CancellationException cancel = new CancellationException("Request was cancelled");
+                    if (exchangeLogger != null) {
+                        logExchange(exchangeLogger, meta, resolved, start.get(),
+                                responseStatus.get(), responseHeaders.get(), null, cancel, inboundHeadersRef.get());
+                    }
+                    if (observer != null) {
+                        notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), cancel, null, attemptCount.get());
                     }
                 });
             }
@@ -285,8 +294,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             })
             .doOnSuccess(terminalBody::set)
             .doOnError(terminalError::set)
-            .doFinally(signalType -> {
-                Throwable error = terminalErrorForSignal(signalType, terminalError.get());
+            .doOnTerminate(() -> {
+                Throwable error = terminalError.get();
                 Object body = terminalBody.get();
                 if (exchangeLogger != null) {
                     logExchange(exchangeLogger, meta, resolved, start.get(),
@@ -294,6 +303,16 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 }
                 if (observer != null) {
                     notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), error, body, attemptCount.get());
+                }
+            })
+            .doOnCancel(() -> {
+                CancellationException cancel = new CancellationException("Request was cancelled");
+                if (exchangeLogger != null) {
+                    logExchange(exchangeLogger, meta, resolved, start.get(),
+                            responseStatus.get(), responseHeaders.get(), null, cancel, inboundHeadersRef.get());
+                }
+                if (observer != null) {
+                    notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), cancel, null, attemptCount.get());
                 }
             });
         }
@@ -496,16 +515,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         } catch (Exception ignored) {
             return false;
         }
-    }
-
-    private Throwable terminalErrorForSignal(SignalType signalType, Throwable terminalError) {
-        if (terminalError != null) {
-            return terminalError;
-        }
-        if (signalType == SignalType.CANCEL) {
-            return new CancellationException("Request was cancelled");
-        }
-        return null;
     }
 
     private void logResilienceOperatorFailure(String operatorType, String instanceName, Exception error) {
