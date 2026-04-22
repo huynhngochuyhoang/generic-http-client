@@ -1,6 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.observability;
 
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
@@ -78,6 +79,15 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             // name+tags combination, avoiding repeated Timer.builder() allocation overhead.
             meterRegistry.timer(config.getMetricName(), tags)
                     .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
+
+            Tags attemptTags = Tags.of(
+                    Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
+                    Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
+                    Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
+                    Tag.of("uri", config.isIncludeUrlPath() && event.getUriPath() != null ? event.getUriPath() : "NONE")
+            );
+            meterRegistry.summary(config.getMetricName() + ".attempts", attemptTags)
+                    .record(event.getAttemptCount());
 
             if (log.isDebugEnabled()) {
                 log.debug("[observability] {} {} {} -> {} ({}ms)",

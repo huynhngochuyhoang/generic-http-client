@@ -20,6 +20,7 @@ public final class HttpClientObserverEvent {
     private final ErrorCategory errorCategory;
     private final Object requestBody;
     private final Object responseBody;
+    private final int attemptCount;
 
     /**
      * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object)}
@@ -50,6 +51,21 @@ public final class HttpClientObserverEvent {
             ErrorCategory errorCategory,
             Object requestBody,
             Object responseBody) {
+        this(clientName, apiName, httpMethod, uriPath, statusCode, durationMs, error, errorCategory, requestBody, responseBody, 1);
+    }
+
+    public HttpClientObserverEvent(
+            String clientName,
+            String apiName,
+            String httpMethod,
+            String uriPath,
+            Integer statusCode,
+            long durationMs,
+            Throwable error,
+            ErrorCategory errorCategory,
+            Object requestBody,
+            Object responseBody,
+            int attemptCount) {
         this.clientName = clientName;
         this.apiName = apiName;
         this.httpMethod = httpMethod;
@@ -60,6 +76,7 @@ public final class HttpClientObserverEvent {
         this.errorCategory = errorCategory;
         this.requestBody = requestBody;
         this.responseBody = responseBody;
+        this.attemptCount = attemptCount;
     }
 
     /** The logical name of the client (value of {@code @ReactiveHttpClient(name = ...)}). */
@@ -99,6 +116,13 @@ public final class HttpClientObserverEvent {
      */
     public Object getResponseBody() { return responseBody; }
 
+    /**
+     * Total number of subscription attempts made to the underlying publisher, including the
+     * first attempt. Values greater than 1 indicate that Resilience4j retry fired at least once.
+     * Useful for detecting whether a downstream service is degraded.
+     */
+    public int getAttemptCount() { return attemptCount; }
+
     /** {@code true} when {@link #getError()} is non-null. */
     public boolean isError() { return error != null; }
 
@@ -111,6 +135,7 @@ public final class HttpClientObserverEvent {
                 ", uriPath='" + uriPath + '\'' +
                 ", statusCode=" + statusCode +
                 ", durationMs=" + durationMs +
+                ", attemptCount=" + attemptCount +
                 ", error=" + (error != null ? error.getClass().getSimpleName() : "none") +
                 ", errorCategory=" + (errorCategory != null ? errorCategory.name() : "none") +
                 '}';

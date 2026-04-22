@@ -52,8 +52,8 @@ class ReactiveHttpClientPropertiesTest {
         ReactiveHttpClientProperties.NetworkConfig network = new ReactiveHttpClientProperties.NetworkConfig();
 
         assertEquals(2000, network.getConnectTimeoutMs());
-        assertEquals(5000, network.getReadTimeoutMs());
-        assertEquals(5000, network.getWriteTimeoutMs());
+        assertEquals(60_000, network.getReadTimeoutMs());
+        assertEquals(60_000, network.getWriteTimeoutMs());
         assertEquals(200, network.getConnectionPool().getMaxConnections());
         assertEquals(5000, network.getConnectionPool().getPendingAcquireTimeoutMs());
     }
