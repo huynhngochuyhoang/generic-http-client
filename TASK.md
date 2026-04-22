@@ -92,7 +92,7 @@
   - **Issue:** `objectMapper.writeValueAsBytes(body)` runs synchronously inside `invoke()`; blocks event loop for large bodies.
   - **Fix:** Wrap in `Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())`. Skip serialization entirely when no auth provider is configured.
 
-- [ ] **M3. Start duration timer at subscribe, not at proxy-invoke**
+- [x] **M3. Start duration timer at subscribe, not at proxy-invoke**
   - **Where:** `ReactiveClientInvocationHandler.java:140`
   - **Issue:** `System.currentTimeMillis()` captured at invoke-time; deferred subscription inflates observed duration.
   - **Fix:** Wrap pipeline in `Mono.defer(() -> { long start = ...; ... })`.

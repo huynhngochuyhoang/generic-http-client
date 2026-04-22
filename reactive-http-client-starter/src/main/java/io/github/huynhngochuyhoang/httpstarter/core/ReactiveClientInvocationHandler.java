@@ -48,6 +48,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -143,7 +144,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
         RequestArgumentResolver.ResolvedArgs resolved = argumentResolver.resolve(meta, args);
 
-        long start = System.currentTimeMillis();
+        AtomicLong start = new AtomicLong();
         HttpExchangeLogger exchangeLogger = resolveExchangeLogger(meta);
 
         WebClient.RequestBodySpec requestSpec = webClient
@@ -207,26 +208,27 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 }
                 return buildFlux(clientResponse, meta.getResponseType());
             })).doOnSubscribe(subscription -> {
+                start.set(System.currentTimeMillis());
                 responseStatus.set(null);
                 responseHeaders.set(Map.of());
                 terminalError.set(null);
+                if (exchangeLogger == null) {
+                    logRequest(meta, start.get());
+                }
             });
             flux = applyTimeoutFlux(flux, timeoutMs);
             flux = applyResilienceFlux(flux, meta);
-            if (exchangeLogger == null) {
-                logRequest(meta, start);
-            }
             if (exchangeLogger != null || observer != null) {
                 flux = flux
                         .doOnError(terminalError::set)
                         .doFinally(signalType -> {
                             Throwable error = terminalErrorForSignal(signalType, terminalError.get());
                             if (exchangeLogger != null) {
-                                logExchange(exchangeLogger, meta, resolved, start,
+                                logExchange(exchangeLogger, meta, resolved, start.get(),
                                         responseStatus.get(), responseHeaders.get(), null, error);
                             }
                             if (observer != null) {
-                                notifyObserver(observer, meta, resolved, start, responseStatus.get(), error, null);
+                                notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), error, null);
                             }
                         });
             }
@@ -242,16 +244,17 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             }
             return buildMono(clientResponse, meta.getResponseType());
         })).doOnSubscribe(subscription -> {
+            start.set(System.currentTimeMillis());
             responseStatus.set(null);
             responseHeaders.set(Map.of());
             terminalError.set(null);
             terminalBody.set(null);
+            if (exchangeLogger == null) {
+                logRequest(meta, start.get());
+            }
         });
         mono = applyTimeoutMono(mono, timeoutMs);
         mono = applyResilienceMono(mono, meta);
-        if (exchangeLogger == null) {
-            logRequest(meta, start);
-        }
         if (exchangeLogger != null || observer != null) {
             mono = mono
                     .doOnSuccess(terminalBody::set)
@@ -260,11 +263,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                         Throwable error = terminalErrorForSignal(signalType, terminalError.get());
                         Object body = terminalBody.get();
                         if (exchangeLogger != null) {
-                            logExchange(exchangeLogger, meta, resolved, start,
+                            logExchange(exchangeLogger, meta, resolved, start.get(),
                                     responseStatus.get(), responseHeaders.get(), body, error);
                         }
                         if (observer != null) {
-                            notifyObserver(observer, meta, resolved, start, responseStatus.get(), error, body);
+                            notifyObserver(observer, meta, resolved, start.get(), responseStatus.get(), error, body);
                         }
                     });
         }

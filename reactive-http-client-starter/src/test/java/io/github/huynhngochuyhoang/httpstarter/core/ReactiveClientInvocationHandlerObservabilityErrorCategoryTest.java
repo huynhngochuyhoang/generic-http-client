@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -243,6 +244,31 @@ class ReactiveClientInvocationHandlerObservabilityErrorCategoryTest {
                 .expectError(RequestSerializationException.class)
                 .verify();
 
+    }
+
+    @Test
+    void shouldStartObserverDurationAtSubscriptionTime() throws Exception {
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                        .body("ok")
+                        .build()))
+                .build();
+
+        AtomicReference<HttpClientObserverEvent> observed = new AtomicReference<>();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, 5000, observed::set);
+
+        Mono<String> deferredRequest = invoke(handler);
+        Thread.sleep(400);
+
+        StepVerifier.create(deferredRequest)
+                .expectNext("ok")
+                .verifyComplete();
+
+        HttpClientObserverEvent event = observed.get();
+        assertNotNull(event);
+        assertTrue(event.getDurationMs() < 300);
     }
 
     private static ReactiveClientInvocationHandler createHandler(
