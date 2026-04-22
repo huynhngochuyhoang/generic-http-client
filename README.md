@@ -52,7 +52,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.6.0</version>
+  <version>1.7.0</version>
 </dependency>
 ```
 
@@ -99,8 +99,8 @@ reactive:
   http:
     network:
       connect-timeout-ms: 2000
-      read-timeout-ms: 5000
-      write-timeout-ms: 5000
+      read-timeout-ms: 60000
+      write-timeout-ms: 60000
       connection-pool:
         max-connections: 200
         pending-acquire-timeout-ms: 5000
@@ -120,8 +120,8 @@ reactive:
           timeout-ms: 0
 ```
 
-`reactive.http.network.read-timeout-ms` configures Reactor Netty **response timeout** (request-level timeout), not channel idle-read timeout.
-Method-level `@TimeoutMs` still has highest precedence and can override/disable this timeout per API.
+`reactive.http.network.read-timeout-ms` and `write-timeout-ms` configure Netty **`ReadTimeoutHandler` / `WriteTimeoutHandler`** channel handlers added to every pooled connection. They act as absolute safety nets — set them larger than any per-request `@TimeoutMs` value (default: 60 000 ms).
+Per-request timeouts use `@TimeoutMs` (method level) or `resilience.timeout-ms` (client level); both apply `HttpClientRequest.responseTimeout()` per attempt. `@TimeoutMs(0)` explicitly disables the per-request timeout for that method.
 
 ### 2.5.1 Outbound auth provider (per client)
 
@@ -282,15 +282,22 @@ If you need per-business-method policies or fallback methods, add Resilience4j a
 
 ## 7) Observability (Micrometer)
 
-When a `MeterRegistry` is present, the starter records timer metrics (default: `http.client.requests`) with key tags:
-- `client.name`
-- `api.name`
-- `http.method`
-- `http.status_code`
-- `outcome`
-- `exception`
-- `error.category`
-- `uri` (can be disabled via `include-url-path`)
+When a `MeterRegistry` is present, the starter records two metrics per exchange:
+
+**`http.client.requests`** (Timer) — duration from first attempt to final completion:
+
+| Tag | Values |
+|---|---|
+| `client.name` | logical client name |
+| `api.name` | `@ApiName` value or method name |
+| `http.method` | `GET`, `POST`, … |
+| `http.status_code` | numeric code or `NONE` |
+| `outcome` | `SUCCESS`, `REDIRECTION`, `CLIENT_ERROR`, `SERVER_ERROR`, `UNKNOWN` |
+| `exception` | simple class name or `none` |
+| `error.category` | `RATE_LIMITED`, `CLIENT_ERROR`, `SERVER_ERROR`, `TIMEOUT`, `CANCELLED`, `AUTH_PROVIDER_ERROR`, `RESPONSE_DECODE_ERROR`, `UNKNOWN`, `none` |
+| `uri` | path template or `NONE` (disable via `include-url-path: false`) |
+
+**`http.client.requests.attempts`** (DistributionSummary) — number of subscription attempts per invocation (1 = succeeded on first try; >1 = Resilience4j retry fired). Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 is a signal that a downstream service is degraded.
 
 ### Observability configuration
 

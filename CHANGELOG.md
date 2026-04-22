@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] – 2026-04-22
+
+### Added
+
+- `HttpClientObserverEvent.getAttemptCount()` — total subscription attempts for an invocation (1 = first-try success; >1 = Resilience4j retry fired at least once). Useful for detecting degraded downstream services.
+- `http.client.requests.attempts` Micrometer `DistributionSummary` recorded by `MicrometerHttpClientObserver` alongside the existing timer. Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 signals a degraded downstream.
+- `ResilienceOperatorApplierTest` — unit tests covering `NoopResilienceOperatorApplier` (passthrough, error propagation) and `Resilience4jOperatorApplier` (success paths, error recording, saturated bulkhead rejection, null-registry fallthrough, non-Resilience4j constructor arguments).
+
+### Changed
+
+- `NetworkConfig` defaults for `readTimeoutMs` and `writeTimeoutMs` raised from 5 000 ms to **60 000 ms (60 s)**. These Netty-level handlers are intentionally larger than any per-request business timeout and act as absolute safety nets for pooled connections.
+
+### Fixed
+
+- **`ReadTimeoutHandler` restored** as a Netty `doOnConnected` channel handler. A previous change had mistakenly replaced it with a global `HttpClient.responseTimeout()` call, which conflated channel-level safety-net behaviour with per-request timeout semantics.
+- `PrematureCloseException` (fired when a per-request `responseTimeout` is cancelled by Reactor Netty) now maps to `ErrorCategory.TIMEOUT` instead of falling through to `UNKNOWN`.
+- Metric duration now reflects **total elapsed time across all retry attempts**. Previously `start` was reset in `doOnSubscribe` on each re-subscription, so the recorded duration captured only the last attempt.
+- `logRequest()` debug log no longer fires on every retry re-subscription; it is emitted exactly once per invocation.
+- Request body serialization (`objectMapper.writeValueAsBytes`) is now **cached** with `Mono.cache()` so retries reuse the already-serialised bytes instead of re-running JSON serialisation on `boundedElastic`.
+
+---
+
 ## [1.6.0] – 2026-04-22
 
 ### Added
@@ -201,7 +223,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.5.0...v1.5.1
 [1.4.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.3.0...v1.4.0
