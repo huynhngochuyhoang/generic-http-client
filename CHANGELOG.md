@@ -9,11 +9,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.6.0] – 2026-04-22
+
 ### Added
 
-- Added observability error categories for network failures:
+- `@PATCH` annotation and method-parser support for HTTP PATCH verbs (H6).
+- `RequestSerializationException` for JSON serialization failures previously wrapped as `AuthProviderException` (M9).
+- Observability error categories for network failures:
   - `ErrorCategory.CONNECT_ERROR` for `ConnectException`
   - `ErrorCategory.UNKNOWN_HOST` for `UnknownHostException`
+- Support for Java `default` methods on `@ReactiveHttpClient` interfaces via `InvocationHandler.invokeDefault` (H4).
+- Request method/URL context on `HttpClientException` and `RemoteServiceException`, including cause-accepting constructors (L10).
+- Additional MDC key fallbacks (`correlationId`, `X-Correlation-Id`, `traceId`) for correlation-ID propagation (M8).
+- Bounded `HttpExchangeLogger` cache (max 256 entries) with one-time warning on eviction (M10).
+- Message-overload constructor on `AuthProviderException` for richer diagnostics (L9).
+- Test coverage for: `@PATCH`, byte[]/String bodies, `default` interface methods, non-reactive return types rejected at parse time, concurrent `RefreshingBearerAuthProvider.invalidate()` races, URL-encoded auth query params, Netty `ReadTimeoutException` classification, and registrar skip-if-present across both orderings (T1–T7, L7).
+
+### Changed
+
+- `DefaultHttpExchangeLogger` redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Api-Key`) and logs bodies at DEBUG only when explicitly enabled (C1).
+- Exception messages no longer embed response bodies; stored bodies are truncated to 4 KB and remain available via `getResponseBody()` (C2).
+- `DefaultErrorDecoder` truncates error bodies to 4 KB before constructing exceptions (C3).
+- `OutboundAuthFilter` URL-encodes auth-provider query parameter values (H1); validates auth header values for CRLF and control characters (C4).
+- `MethodMetadataCache` rejects non-reactive return types at parse time (H2) and rejects non-blank `@HeaderParam` values on `Map` parameters (H8).
+- `MicrometerHttpClientObserver` tags network errors with `http.status_code="NONE"` instead of `CLIENT_ERROR`; defaults `clientName` to `"UNKNOWN"` on null (H5, L8).
+- `MethodMetadata` collections are frozen (`Map.copyOf` / `Set.copyOf`) after parsing (M1).
+- Auth body serialization runs on `Schedulers.boundedElastic()` and is skipped entirely when no auth provider is configured (M2).
+- Observability duration is now measured from subscribe time, not proxy-invoke time (M3).
+- Consolidated timeout-resolution helpers into a single source of truth (M4).
+- `CorrelationIdWebFilter` sets (rather than appends) `X-Correlation-Id` on outbound requests to prevent duplicates (M7).
+- `loggingFilter` now logs method, URL, status, and latency as documented, tagging outcomes as `OK`, `HTTP_ERROR`, or `TRANSPORT_ERROR` (M5).
+- Request-argument resolver validates `@HeaderParam` values for CRLF / control characters (C4).
+- Internal cleanups: simplified `getObserver()`, removed redundant `Set<String>` qualifier, replaced Stream-based `getHeaderIgnoreCase` with a loop, switched `Class.forName` to `ClassUtils.resolveClassName` for container safety (L1–L4).
+
+### Fixed
+
+- Netty `ReadTimeoutException` now maps to `ErrorCategory.TIMEOUT` instead of `UNKNOWN` (H3).
+- Race in `RefreshingBearerAuthProvider.invalidate()` where an in-flight refresh could re-populate the cache immediately after invalidation is resolved via a monotonic invalidation epoch (H7).
+- `RemoteServiceException` message formatting when method is `"UNKNOWN"` or only one of method/URL is present.
+
+### Security
+
+- Sensitive-header redaction (C1) and the removal of response bodies from exception messages (C2, C3) reduce the risk of credentials and PII leaking into logs, metric tags, and error-reporting pipelines.
+- Header-injection hardening via CRLF / control-character validation on `@HeaderParam` and auth-provider header values (C4).
+
+### Deprecated
+
+- The `HttpClientObserverEvent` constructor that leaves `errorCategory` unset (L6).
+
+### Build
+
+- Pinned `maven-surefire-plugin` to 3.2.5 in the parent POM so `mvn test` discovers JUnit 5 tests without an explicit plugin coordinate.
+
+### Removed
+
+- Dead utility `UriTemplateExpander` (M6).
 
 ---
 
@@ -149,7 +201,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.5.0...v1.5.1
 [1.4.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.2.0...v1.3.0
