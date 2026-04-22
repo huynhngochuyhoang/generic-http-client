@@ -6,7 +6,7 @@
 
     <groupId>io.github.huynhngochuyhoang</groupId>
     <artifactId>reactive-http-client</artifactId>
-    <version>1.5.1</version>
+    <version>1.6.0</version>
     <packaging>pom</packaging>
 
     <name>reactive-http-client</name>
@@ -28,6 +28,7 @@
         <maven-javadoc-plugin.version>3.7.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.2.4</maven-gpg-plugin.version>
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
+        <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
         <central-publishing-maven-plugin.version>0.10.0</central-publishing-maven-plugin.version>
     </properties>
 
@@ -83,6 +84,11 @@
                         <source>17</source>
                         <target>17</target>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
                 </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
