@@ -72,12 +72,25 @@ public class HttpClientException extends RuntimeException {
      * @param cause        the underlying cause
      */
     public HttpClientException(int statusCode, String responseBody, Throwable cause) {
-        super("HTTP client error " + statusCode, cause);
+        this(statusCode, responseBody, null, null, cause);
+    }
+
+    /**
+     * Creates a new {@code HttpClientException} with request context and an explicit cause.
+     *
+     * @param statusCode    the HTTP status code (4xx)
+     * @param responseBody  the raw response body (may be empty)
+     * @param requestMethod request method (optional)
+     * @param requestUrl    request URL (optional)
+     * @param cause         the underlying cause
+     */
+    public HttpClientException(int statusCode, String responseBody, String requestMethod, String requestUrl, Throwable cause) {
+        super(buildMessage(statusCode, requestMethod, requestUrl), cause);
         this.statusCode = statusCode;
         this.responseBody = truncate(responseBody);
         this.errorCategory = statusCode == 429 ? ErrorCategory.RATE_LIMITED : ErrorCategory.CLIENT_ERROR;
-        this.requestMethod = null;
-        this.requestUrl = null;
+        this.requestMethod = requestMethod;
+        this.requestUrl = requestUrl;
     }
 
     public int getStatusCode() {

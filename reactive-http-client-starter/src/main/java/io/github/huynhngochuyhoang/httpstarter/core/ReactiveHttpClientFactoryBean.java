@@ -212,13 +212,17 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         return (request, next) -> {
             long startMs = System.currentTimeMillis();
             return next.exchange(request)
-                    .doOnNext(response -> log.debug("[{}] {} {} -> {} ({}ms)",
-                            type != null ? type.getSimpleName() : "ReactiveHttpClient",
-                            request.method(),
-                            request.url(),
-                            response.statusCode(),
-                            System.currentTimeMillis() - startMs))
-                    .doOnError(error -> log.debug("[{}] {} {} -> ERROR {} ({}ms)",
+                    .doOnNext(response -> {
+                        String outcome = response.statusCode().isError() ? "HTTP_ERROR" : "OK";
+                        log.debug("[{}] {} {} -> {} {} ({}ms)",
+                                type != null ? type.getSimpleName() : "ReactiveHttpClient",
+                                request.method(),
+                                request.url(),
+                                outcome,
+                                response.statusCode().value(),
+                                System.currentTimeMillis() - startMs);
+                    })
+                    .doOnError(error -> log.debug("[{}] {} {} -> TRANSPORT_ERROR {} ({}ms)",
                             type != null ? type.getSimpleName() : "ReactiveHttpClient",
                             request.method(),
                             request.url(),
