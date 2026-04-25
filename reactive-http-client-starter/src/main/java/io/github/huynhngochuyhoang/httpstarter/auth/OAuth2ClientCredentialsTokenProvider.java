@@ -1,0 +1,203 @@
+package io.github.huynhngochuyhoang.httpstarter.auth;
+
+import io.github.huynhngochuyhoang.httpstarter.exception.AuthProviderException;
+import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * {@link AccessTokenProvider} implementing the OAuth 2.0 Client Credentials grant
+ * (<a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.4">RFC 6749 §4.4</a>).
+ *
+ * <p>Intended to be composed with {@link RefreshingBearerAuthProvider} to provide
+ * caching + single-in-flight-refresh semantics:
+ *
+ * <pre>{@code
+ * @Bean("userServiceAuthProvider")
+ * AuthProvider userServiceAuthProvider(WebClient.Builder builder) {
+ *     OAuth2ClientCredentialsTokenProvider tokenProvider =
+ *             OAuth2ClientCredentialsTokenProvider.builder(builder.build())
+ *                     .tokenUri("https://auth.example.com/oauth/token")
+ *                     .clientId("user-service")
+ *                     .clientSecret("...")
+ *                     .scope("read:users")
+ *                     .build();
+ *     return new RefreshingBearerAuthProvider(tokenProvider);
+ * }
+ * }</pre>
+ *
+ * <p>Supports the two standard client-authentication schemes:
+ * <ul>
+ *   <li><b>HTTP Basic</b> (default) — {@code client_id:client_secret} in the
+ *       {@code Authorization} header.</li>
+ *   <li><b>Form post</b> — {@code client_id} / {@code client_secret} as form
+ *       parameters; enable via {@code authStyle(AuthStyle.FORM_POST)}.</li>
+ * </ul>
+ *
+ * <p>Optional {@code scope} and {@code audience} parameters are sent as form
+ * fields when configured.
+ *
+ * <p>The resulting {@link AccessToken#expiresAt()} is derived from the server's
+ * {@code expires_in} (seconds). When the server omits it, the token is treated
+ * as non-expiring. A configurable {@code expiryLeeway} is subtracted from the
+ * server's value to refresh slightly early (default 30 s).
+ */
+public final class OAuth2ClientCredentialsTokenProvider implements AccessTokenProvider {
+
+    /** Where the client credentials are carried in the token request. */
+    public enum AuthStyle {
+        /** {@code Authorization: Basic base64(client_id:client_secret)}. */
+        BASIC_AUTH,
+        /** {@code client_id} + {@code client_secret} as form-urlencoded body fields. */
+        FORM_POST
+    }
+
+    private final WebClient webClient;
+    private final String tokenUri;
+    private final String clientId;
+    private final String clientSecret;
+    private final String scope;
+    private final String audience;
+    private final AuthStyle authStyle;
+    private final Duration expiryLeeway;
+
+    private OAuth2ClientCredentialsTokenProvider(Builder b) {
+        this.webClient = Objects.requireNonNull(b.webClient, "webClient");
+        this.tokenUri = requireNonBlank(b.tokenUri, "tokenUri");
+        this.clientId = requireNonBlank(b.clientId, "clientId");
+        this.clientSecret = requireNonBlank(b.clientSecret, "clientSecret");
+        this.scope = b.scope;
+        this.audience = b.audience;
+        this.authStyle = b.authStyle != null ? b.authStyle : AuthStyle.BASIC_AUTH;
+        this.expiryLeeway = b.expiryLeeway != null ? b.expiryLeeway : Duration.ofSeconds(30);
+        if (this.expiryLeeway.isNegative()) {
+            throw new IllegalArgumentException("expiryLeeway must not be negative");
+        }
+    }
+
+    public static Builder builder(WebClient webClient) {
+        return new Builder(webClient);
+    }
+
+    @Override
+    public Mono<AccessToken> fetchToken() {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "client_credentials");
+        if (StringUtils.hasText(scope)) {
+            form.add("scope", scope);
+        }
+        if (StringUtils.hasText(audience)) {
+            form.add("audience", audience);
+        }
+
+        WebClient.RequestHeadersSpec<?> spec;
+        if (authStyle == AuthStyle.FORM_POST) {
+            form.add("client_id", clientId);
+            form.add("client_secret", clientSecret);
+            spec = webClient.post().uri(tokenUri)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(BodyInserters.fromFormData(form));
+        } else {
+            spec = webClient.post().uri(tokenUri)
+                    .headers(h -> h.setBasicAuth(clientId, clientSecret))
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(BodyInserters.fromFormData(form));
+        }
+
+        return spec.retrieve()
+                .bodyToMono(TokenResponse.class)
+                .map(this::toAccessToken);
+    }
+
+    private AccessToken toAccessToken(TokenResponse response) {
+        String value = response.access_token;
+        if (!StringUtils.hasText(value)) {
+            throw new AuthProviderException(
+                    "OAuth2 token endpoint returned no access_token",
+                    new IllegalStateException("missing access_token"));
+        }
+        Instant expiresAt = null;
+        if (response.expires_in != null && response.expires_in > 0) {
+            long effectiveSeconds = Math.max(0L, response.expires_in - expiryLeeway.getSeconds());
+            expiresAt = Instant.now().plusSeconds(effectiveSeconds);
+        }
+        return new AccessToken(value, expiresAt);
+    }
+
+    private static String requireNonBlank(String value, String name) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+        return value;
+    }
+
+    /**
+     * Shape of a successful OAuth2 token response. Field names intentionally
+     * mirror the on-wire JSON keys.
+     */
+    @SuppressWarnings({"checkstyle:MemberName", "unused"})
+    static final class TokenResponse {
+        public String access_token;
+        public String token_type;
+        public Long expires_in;
+        public String scope;
+    }
+
+    // -------------------------------------------------------------------------
+    // Builder
+    // -------------------------------------------------------------------------
+
+    public static final class Builder {
+        private final WebClient webClient;
+        private String tokenUri;
+        private String clientId;
+        private String clientSecret;
+        private String scope;
+        private String audience;
+        private AuthStyle authStyle;
+        private Duration expiryLeeway;
+
+        private Builder(WebClient webClient) {
+            this.webClient = webClient;
+        }
+
+        public Builder tokenUri(String tokenUri) { this.tokenUri = tokenUri; return this; }
+        public Builder clientId(String clientId) { this.clientId = clientId; return this; }
+        public Builder clientSecret(String clientSecret) { this.clientSecret = clientSecret; return this; }
+        public Builder scope(String scope) { this.scope = scope; return this; }
+        public Builder audience(String audience) { this.audience = audience; return this; }
+        public Builder authStyle(AuthStyle authStyle) { this.authStyle = authStyle; return this; }
+
+        /** How much time to subtract from the server's {@code expires_in} when setting {@link AccessToken#expiresAt()}. */
+        public Builder expiryLeeway(Duration expiryLeeway) { this.expiryLeeway = expiryLeeway; return this; }
+
+        public OAuth2ClientCredentialsTokenProvider build() {
+            return new OAuth2ClientCredentialsTokenProvider(this);
+        }
+
+        /**
+         * Convenience factory for tests — lets a test supply a pre-built
+         * {@code Map<String, Object>} response via a stub WebClient.
+         */
+        public Map<String, Object> debugConfig() {
+            return Map.of(
+                    "tokenUri", tokenUri,
+                    "clientId", clientId,
+                    "scope", scope == null ? "" : scope,
+                    "audience", audience == null ? "" : audience,
+                    "authStyle", authStyle == null ? AuthStyle.BASIC_AUTH : authStyle
+            );
+        }
+    }
+}

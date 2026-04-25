@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.huynhngochuyhoang</groupId>
         <artifactId>reactive-http-client</artifactId>
-        <version>1.8.1</version>
+        <version>1.9.0</version>
     </parent>
 
     <artifactId>reactive-http-client-starter</artifactId>
@@ -60,11 +60,23 @@
             <artifactId>resilience4j-bulkhead</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Micrometer – optional; bring your own MeterRegistry / ObservationRegistry in consuming app -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Spring Boot Actuator – optional; enables HttpClientHealthIndicator when present -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
             <optional>true</optional>
         </dependency>
 

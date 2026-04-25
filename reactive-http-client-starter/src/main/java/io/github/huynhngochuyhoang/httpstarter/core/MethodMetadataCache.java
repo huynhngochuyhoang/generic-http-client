@@ -70,8 +70,35 @@ public class MethodMetadataCache {
                     }
                 } else if (ann instanceof Body) {
                     meta.setBodyIndex(i);
+                } else if (ann instanceof FormField ff) {
+                    if (ff.value() == null || ff.value().isBlank()) {
+                        throw new IllegalArgumentException(
+                                "@FormField value must not be blank for parameter at index " + i + " in method: " + method);
+                    }
+                    meta.getFormFieldParams().put(i, ff.value());
+                } else if (ann instanceof FormFile ff) {
+                    if (ff.value() == null || ff.value().isBlank()) {
+                        throw new IllegalArgumentException(
+                                "@FormFile value must not be blank for parameter at index " + i + " in method: " + method);
+                    }
+                    meta.getFormFileParams().put(i, ff);
                 }
             }
+        }
+
+        if (method.isAnnotationPresent(MultipartBody.class)) {
+            meta.setMultipart(true);
+            if (meta.getBodyIndex() >= 0) {
+                throw new IllegalStateException(
+                        "@MultipartBody cannot be combined with a @Body parameter on method: " + method);
+            }
+            if (meta.getFormFieldParams().isEmpty() && meta.getFormFileParams().isEmpty()) {
+                throw new IllegalStateException(
+                        "@MultipartBody method has no @FormField / @FormFile parameters: " + method);
+            }
+        } else if (!meta.getFormFieldParams().isEmpty() || !meta.getFormFileParams().isEmpty()) {
+            throw new IllegalStateException(
+                    "@FormField / @FormFile parameters require the method to be annotated @MultipartBody: " + method);
         }
 
         // ---- Return type ----
