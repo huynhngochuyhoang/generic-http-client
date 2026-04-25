@@ -52,7 +52,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.8.0</version>
+  <version>1.9.0</version>
 </dependency>
 ```
 
@@ -99,11 +99,14 @@ reactive:
   http:
     network:
       connect-timeout-ms: 2000
-      read-timeout-ms: 60000
-      write-timeout-ms: 60000
+      network-read-timeout-ms: 60000    # Netty ReadTimeoutHandler safety net
+      network-write-timeout-ms: 60000   # Netty WriteTimeoutHandler safety net
       connection-pool:
         max-connections: 200
         pending-acquire-timeout-ms: 5000
+        max-idle-time-ms: 30000         # evict idle connections after 30 s (0 = off)
+        max-life-time-ms: 300000        # recycle pooled connections after 5 min (0 = unlimited)
+        evict-in-background-ms: 60000   # background eviction sweep interval (0 = off)
     clients:
       user-service:
         base-url: https://api.example.com
@@ -111,6 +114,8 @@ reactive:
         codec-max-in-memory-size-mb: 2
         compression-enabled: false
         log-exchange: false
+        pool:                            # optional per-client pool override
+          max-connections: 500           # inherits the global pool when omitted
         resilience:
           enabled: true
           circuit-breaker: user-service
@@ -120,8 +125,26 @@ reactive:
           timeout-ms: 0
 ```
 
-`reactive.http.network.read-timeout-ms` and `write-timeout-ms` configure Netty **`ReadTimeoutHandler` / `WriteTimeoutHandler`** channel handlers added to every pooled connection. They act as absolute safety nets — set them larger than any per-request `@TimeoutMs` value (default: 60 000 ms).
-Per-request timeouts use `@TimeoutMs` (method level) or `resilience.timeout-ms` (client level); both apply `HttpClientRequest.responseTimeout()` per attempt. `@TimeoutMs(0)` explicitly disables the per-request timeout for that method.
+#### Timeout layers: which one fires first?
+
+Two independent timeouts act on every outbound call. Pick the right layer for the right concern.
+
+| Layer | Property / annotation | Default | Scope | Fires when |
+|---|---|---|---|---|
+| Connect timeout | `reactive.http.network.connect-timeout-ms` | 2 000 ms | TCP handshake only | New connection cannot be established |
+| Per-request response timeout | `@TimeoutMs(...)` (method) > `resilience.timeout-ms` (client) | disabled | Per attempt | An attempt produces no response within the limit; retries each get their own budget |
+| Safety-net read timeout | `reactive.http.network.network-read-timeout-ms` (alias: `read-timeout-ms`) | 60 000 ms | Per pooled connection | No inbound bytes for this duration — catches stuck sockets, not slow responses |
+| Safety-net write timeout | `reactive.http.network.network-write-timeout-ms` (alias: `write-timeout-ms`) | 60 000 ms | Per pooled connection | No outbound bytes accepted for this duration |
+
+**Rule of thumb:** set `network-read-timeout-ms` / `network-write-timeout-ms` well above the largest `@TimeoutMs` or `resilience.timeout-ms` value you expect. Whichever fires first wins; you want the per-request timeout to win so retries behave predictably. `@TimeoutMs(0)` disables the per-request timeout for one method without touching the safety nets.
+
+The legacy property names `read-timeout-ms` / `write-timeout-ms` still bind for backwards compatibility but are deprecated — IDEs will flag them. Prefer the `network-*` names.
+
+#### Connection-pool tuning
+
+`reactive.http.network.connection-pool` configures the global defaults applied to every client. Any field may be overridden per client via `reactive.http.clients.<name>.pool.*` — when present, the client-level block replaces the global block wholesale (no field merging). Typical usage: bump `max-connections` for a hot internal service while leaving the default for low-volume partners.
+
+`max-idle-time-ms` and `max-life-time-ms` are critical behind load balancers that silently drop long-idle sockets. When set, connections are evicted before a half-dead socket is handed out. `evict-in-background-ms` controls how often the provider sweeps for evictable entries; `0` (the default) disables the sweep and relies on acquire-time checks only.
 
 ### 2.5.1 Outbound auth provider (per client)
 
@@ -155,6 +178,34 @@ AuthProvider oauthAuthProvider(OAuthTokenClient tokenClient) {
 }
 ```
 
+For standard OAuth 2.0 client-credentials flows, the starter ships
+`OAuth2ClientCredentialsTokenProvider` so you don't need to hand-roll the
+token-endpoint client. Compose it with `RefreshingBearerAuthProvider` for
+caching + single-in-flight-refresh:
+
+```java
+@Bean("userServiceAuthProvider")
+AuthProvider userServiceAuthProvider(WebClient.Builder builder) {
+    OAuth2ClientCredentialsTokenProvider tokenProvider =
+            OAuth2ClientCredentialsTokenProvider.builder(builder.build())
+                    .tokenUri("https://auth.example.com/oauth/token")
+                    .clientId("user-service")
+                    .clientSecret("...")
+                    .scope("read:users")
+                    // .audience("https://api.example.com/")        // optional
+                    // .authStyle(AuthStyle.FORM_POST)              // default is BASIC_AUTH
+                    // .expiryLeeway(Duration.ofSeconds(30))        // refresh slightly early
+                    .build();
+    return new RefreshingBearerAuthProvider(tokenProvider);
+}
+```
+
+Supports both standard client-authentication schemes (HTTP Basic by default;
+opt into form-post via `authStyle(AuthStyle.FORM_POST)`), forwards optional
+`scope` / `audience` parameters, and converts the server's `expires_in`
+(seconds) into an `AccessToken.expiresAt()` minus the configurable
+`expiryLeeway` so the cached token is refreshed slightly before expiry.
+
 `RefreshingBearerAuthProvider` behavior:
 - caches the latest token value
 - refreshes when token enters the refresh window (`expiresAt - refreshSkew`)
@@ -176,6 +227,40 @@ AuthProvider hmacAuthProvider(HmacSigner signer) {
     });
 }
 ```
+
+### 2.5.2 Multipart / form-data uploads
+
+Annotate a method with `@MultipartBody` and supply parts via `@FormField`
+(scalar) or `@FormFile` (file) parameters. The starter builds a
+`multipart/form-data` body via Spring's `MultipartBodyBuilder`; the
+`Content-Type` header (with the correct boundary) is generated for you.
+
+```java
+@ReactiveHttpClient(name = "user-service")
+public interface UserService {
+
+    @POST("/users/{id}/avatar")
+    @MultipartBody
+    Mono<Void> uploadAvatar(
+            @PathVar("id") long userId,
+            @FormField("description") String description,
+            @FormFile(value = "avatar", filename = "fallback.bin",
+                      contentType = "image/png") Resource avatar);
+
+    @POST("/imports")
+    @MultipartBody
+    Mono<ImportReceipt> importCsv(
+            @FormField("source") String source,
+            @FormFile(value = "file", filename = "data.csv",
+                      contentType = "text/csv") byte[] csvBytes);
+}
+```
+
+`@FormFile` accepts `byte[]`, any `org.springframework.core.io.Resource`, or
+the convenience record `io.github.huynhngochuyhoang.httpstarter.core.FileAttachment`
+(carries bytes + filename + content-type, overriding the annotation defaults).
+Combining `@MultipartBody` with `@Body` on the same method is rejected at
+metadata-parse time — pick one.
 
 ### 2.6 Inject and use
 
@@ -221,6 +306,9 @@ Each proxy invocation follows this pipeline:
 | `@HeaderParam(name)` | Parameter | Header parameter |
 | `@HeaderParam Map<String, String>` | Parameter | Dynamic header map |
 | `@Body` | Parameter | Request body |
+| `@MultipartBody` | Method | Marks the request as `multipart/form-data` (incompatible with `@Body`) |
+| `@FormField(name)` | Parameter | Scalar / multi-value text part of a `@MultipartBody` request |
+| `@FormFile(name, filename, contentType)` | Parameter | File part of a `@MultipartBody` request — accepts `byte[]`, `Resource`, or `FileAttachment` |
 | `@ApiName("...")` | Method | Logical API name for metrics/tracing |
 | `@TimeoutMs(ms)` | Method | Method-level timeout override (`0` disables timeout for that method) |
 | `@LogHttpExchange` | Method | Request/response log hook via `HttpExchangeLogger` |
@@ -282,7 +370,7 @@ If you need per-business-method policies or fallback methods, add Resilience4j a
 
 ## 7) Observability (Micrometer)
 
-When a `MeterRegistry` is present, the starter records two metrics per exchange:
+When a `MeterRegistry` is present, the starter records four metrics per exchange:
 
 **`http.client.requests`** (Timer) — duration from first attempt to final completion:
 
@@ -299,6 +387,67 @@ When a `MeterRegistry` is present, the starter records two metrics per exchange:
 
 **`http.client.requests.attempts`** (DistributionSummary) — number of subscription attempts per invocation (1 = succeeded on first try; >1 = Resilience4j retry fired). Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 is a signal that a downstream service is degraded.
 
+**`http.client.requests.request.size`** (DistributionSummary) — serialised request body bytes. Recorded only when the body is measurable cheaply: `byte[]` (length), `String` / `CharSequence` (UTF-8 byte length), or `null` (`0`). Arbitrary objects (POJOs serialised by the codec) are **not** measured to avoid double-serialisation cost. Tags: `client.name`, `api.name`, `http.method`, `uri`.
+
+**`http.client.requests.response.size`** (DistributionSummary) — response body bytes as advertised by the server via `Content-Length`. Chunked responses and responses without the header are skipped. Tags: `client.name`, `api.name`, `http.method`, `uri`.
+
+### Connection-pool metrics (Reactor Netty)
+
+When `reactive.http.network.connection-pool.metrics-enabled: true` (or the same key on a per-client `pool` block), the `ConnectionProvider` publishes Reactor Netty's built-in pool gauges to the global `MeterRegistry`:
+
+- `reactor.netty.connection.provider.total.connections`
+- `reactor.netty.connection.provider.active.connections`
+- `reactor.netty.connection.provider.idle.connections`
+- `reactor.netty.connection.provider.pending.connections`
+
+All gauges are tagged with the pool name (`reactive-http-client-<clientName>`). Off by default — a small per-request overhead is paid when enabled.
+
+### Actuator health indicator
+
+When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `http.client.requests` timer meters and reports per-client error rates computed from probe-to-probe deltas — i.e. the window size is the interval between actuator health probes. No additional observation path is required (the indicator does not implement `HttpClientObserver`, so the `@ConditionalOnMissingBean(HttpClientObserver.class)` override contract still stands).
+
+```yaml
+reactive:
+  http:
+    observability:
+      health:
+        enabled: true              # master switch (default true)
+        error-rate-threshold: 0.5  # ratio (0..1) above which a client reports DOWN
+        min-samples: 10            # delta count required before evaluating a client
+```
+
+A probe for a registered client is tallied as:
+
+- `INSUFFICIENT_SAMPLES` when `delta-count < min-samples` (noisy-quiet-window suppression).
+- `UP` when `errorRate <= error-rate-threshold`.
+- `DOWN` when `errorRate > error-rate-threshold` — overall indicator is DOWN if any client is DOWN.
+
+Sample actuator payload:
+
+```json
+{
+  "status": "DOWN",
+  "details": {
+    "user-service":     { "samples": 10, "errors": 8, "errorRate": 0.8, "status": "DOWN" },
+    "partner-service":  { "samples": 20, "errors": 1, "errorRate": 0.05, "status": "UP" },
+    "errorRateThreshold": 0.5,
+    "minSamples": 10
+  }
+}
+```
+
+To override, register your own bean named `reactiveHttpClientHealthIndicator`.
+
+### Resilience4j metrics
+
+When both `micrometer-core` and `io.github.resilience4j:resilience4j-micrometer` are on the classpath **and** the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, `BulkheadRegistry` as beans, the starter auto-binds Resilience4j's tagged metrics to the shared `MeterRegistry`:
+
+- `resilience4j.circuitbreaker.*` — state (`open`/`half_open`/`closed`), calls, buffered calls, failure rate.
+- `resilience4j.retry.*` — successful / failed attempts, with / without retry.
+- `resilience4j.bulkhead.*` — available concurrent calls, max concurrent calls.
+
+The bindings skip automatically if any of the three conditions isn't met. To disable for a specific registry, declare your own `MeterBinder` with the name `reactiveHttpCircuitBreakerMeterBinder` (or the retry / bulkhead equivalent).
+
 ### Observability configuration
 
 ```yaml
@@ -310,6 +459,9 @@ reactive:
       include-url-path: true
       log-request-body: false
       log-response-body: false
+    network:
+      connection-pool:
+        metrics-enabled: false   # flip to true to expose reactor.netty.connection.provider.* gauges
 ```
 
 > Production recommendation: enable body logging only when truly required, and always apply PII masking.
@@ -330,17 +482,73 @@ mvn -B -ntp verify
 reactive-http-client/
 ├── pom.xml
 ├── CHANGELOG.md
-└── reactive-http-client-starter/
+├── reactive-http-client-starter/
+│   ├── pom.xml
+│   └── src/main/java/io/github/huynhngochuyhoang/httpstarter/
+│       ├── annotation/
+│       ├── auth/
+│       ├── config/
+│       ├── core/
+│       ├── enable/
+│       ├── exception/
+│       ├── filter/
+│       └── observability/
+└── reactive-http-client-test/
     ├── pom.xml
-    └── src/main/java/io/github/huynhngochuyhoang/httpstarter/
-        ├── annotation/
-        ├── config/
-        ├── core/
-        ├── enable/
-        ├── exception/
-        ├── filter/
-        └── observability/
+    └── src/main/java/io/github/huynhngochuyhoang/httpstarter/test/
+        ├── ErrorCategoryAssertions.java
+        ├── MockReactiveHttpClient.java
+        └── RecordedExchange.java
 ```
+
+---
+
+## 9.1) Test helpers (`reactive-http-client-test`)
+
+The starter ships a companion artifact for unit-testing
+`@ReactiveHttpClient` interfaces without standing up a real HTTP server:
+
+```xml
+<dependency>
+  <groupId>io.github.huynhngochuyhoang</groupId>
+  <artifactId>reactive-http-client-test</artifactId>
+  <version>${reactive-http-client.version}</version>
+  <scope>test</scope>
+</dependency>
+```
+
+`MockReactiveHttpClient` builds a real proxy backed by an in-process
+`ExchangeFunction`, records every outbound exchange, and serves canned
+responses based on registered matchers:
+
+```java
+MockReactiveHttpClient<UserService> mock = MockReactiveHttpClient.forClient(UserService.class)
+        .baseUrl("http://mock.local")
+        .respondTo(HttpMethod.GET, "/users/42",
+                ex -> MockReactiveHttpClient.json(200, "{\"id\":42,\"name\":\"alice\"}"))
+        .respondTo(HttpMethod.POST, "/users",
+                ex -> MockReactiveHttpClient.json(201, "{\"id\":7}"))
+        .build();
+
+User user = mock.proxy().getUser(42).block();
+
+RecordedExchange recorded = mock.lastExchange();
+assertThat(recorded.method()).isEqualTo(HttpMethod.GET);
+assertThat(recorded.uri().getPath()).isEqualTo("/users/42");
+```
+
+`ErrorCategoryAssertions` is a small fluent helper for asserting on the
+library's error contract:
+
+```java
+ErrorCategoryAssertions.assertThatFails(mock.proxy().getUser(99))
+        .hasErrorCategory(ErrorCategory.CLIENT_ERROR)
+        .hasStatusCode(404);
+```
+
+Unmatched requests fall through to a configurable fallback response (HTTP
+404 by default) so tests fail loudly instead of hanging on a missing
+matcher.
 
 ---
 

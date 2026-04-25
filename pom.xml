@@ -6,7 +6,7 @@
 
     <groupId>io.github.huynhngochuyhoang</groupId>
     <artifactId>reactive-http-client</artifactId>
-    <version>1.8.1</version>
+    <version>1.9.0</version>
     <packaging>pom</packaging>
 
     <name>reactive-http-client</name>
@@ -15,6 +15,7 @@
 
     <modules>
         <module>reactive-http-client-starter</module>
+        <module>reactive-http-client-test</module>
     </modules>
 
     <properties>

@@ -1,5 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import io.github.huynhngochuyhoang.httpstarter.annotation.FormFile;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -31,6 +33,13 @@ public class MethodMetadata {
     /** parameter index of the @Body argument, or -1 if absent */
     private int bodyIndex = -1;
 
+    /** {@code true} when the method is annotated {@code @MultipartBody}. */
+    private boolean multipart;
+    /** index → form-field name (for {@code @FormField} parameters). */
+    private Map<Integer, String> formFieldParams = new HashMap<>();
+    /** index → {@code @FormFile} metadata. */
+    private Map<Integer, FormFile> formFileParams = new HashMap<>();
+
     private boolean returnsMono;
     private boolean returnsFlux;
 
@@ -58,6 +67,12 @@ public class MethodMetadata {
 
     public int getBodyIndex() { return bodyIndex; }
     public void setBodyIndex(int bodyIndex) { this.bodyIndex = bodyIndex; }
+
+    public boolean isMultipart() { return multipart; }
+    public void setMultipart(boolean multipart) { this.multipart = multipart; }
+
+    public Map<Integer, String> getFormFieldParams() { return formFieldParams; }
+    public Map<Integer, FormFile> getFormFileParams() { return formFileParams; }
 
     public boolean isReturnsMono() { return returnsMono; }
     public void setReturnsMono(boolean returnsMono) { this.returnsMono = returnsMono; }
@@ -92,5 +107,7 @@ public class MethodMetadata {
         queryParams = Map.copyOf(queryParams);
         headerParams = Map.copyOf(headerParams);
         headerMapParams = Set.copyOf(headerMapParams);
+        formFieldParams = Map.copyOf(formFieldParams);
+        formFileParams = Map.copyOf(formFileParams);
     }
 }

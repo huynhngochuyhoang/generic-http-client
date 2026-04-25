@@ -1,5 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.filter;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -7,17 +9,19 @@ import reactor.core.publisher.Mono;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * {@link WebFilter} that captures a snapshot of all inbound request headers from
- * the upstream caller and stores them in the Reactor {@link reactor.util.context.Context}.
+ * {@link WebFilter} that captures a filtered snapshot of inbound request headers
+ * and stores it in the Reactor {@link reactor.util.context.Context}.
  *
- * <p>This makes the inbound headers available to reactive HTTP client calls made
- * within the same request chain. Custom {@link io.github.huynhngochuyhoang.httpstarter.core.HttpExchangeLogger}
- * implementations can then read them via
- * {@link io.github.huynhngochuyhoang.httpstarter.core.HttpExchangeLogContext#inboundHeaders()}
- * to include propagated headers (e.g. {@code X-Request-Id}, {@code X-User-Id}) in log records.
+ * <p>The allow-list / deny-list from
+ * {@link ReactiveHttpClientProperties.InboundHeadersConfig} are applied before the
+ * snapshot is stored, so sensitive headers such as {@code Authorization} or
+ * {@code Cookie} never reach downstream log / metrics consumers that read from
+ * {@link io.github.huynhngochuyhoang.httpstarter.core.HttpExchangeLogContext#inboundHeaders()}.
  *
  * <p>Registered automatically by
  * {@link io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientAutoConfiguration}
@@ -25,13 +29,46 @@ import java.util.Map;
  */
 public class InboundHeadersWebFilter implements WebFilter {
 
-    /** Reactor context key under which the inbound headers map is stored. */
+    /** Reactor context key under which the filtered inbound headers map is stored. */
     public static final String INBOUND_HEADERS_CONTEXT_KEY = "inboundHeaders";
+
+    private static final List<String> REDACTED_VALUE = List.of("[REDACTED]");
+
+    private final Set<String> allowList;
+    private final Set<String> denyList;
+
+    /** Default constructor uses an {@link ReactiveHttpClientProperties.InboundHeadersConfig} with defaults. */
+    public InboundHeadersWebFilter() {
+        this(new ReactiveHttpClientProperties.InboundHeadersConfig());
+    }
+
+    public InboundHeadersWebFilter(ReactiveHttpClientProperties.InboundHeadersConfig config) {
+        ReactiveHttpClientProperties.InboundHeadersConfig resolved =
+                config != null ? config : new ReactiveHttpClientProperties.InboundHeadersConfig();
+        this.allowList = Set.copyOf(resolved.getAllowList());
+        this.denyList = Set.copyOf(resolved.getDenyList());
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        Map<String, List<String>> snapshot = new LinkedHashMap<>(exchange.getRequest().getHeaders());
+        Map<String, List<String>> snapshot = filterHeaders(exchange.getRequest().getHeaders());
         return chain.filter(exchange)
                 .contextWrite(ctx -> ctx.put(INBOUND_HEADERS_CONTEXT_KEY, snapshot));
+    }
+
+    private Map<String, List<String>> filterHeaders(HttpHeaders headers) {
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        headers.forEach((name, values) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (!allowList.isEmpty() && !allowList.contains(lower)) {
+                return;
+            }
+            if (denyList.contains(lower)) {
+                out.put(name, REDACTED_VALUE);
+            } else {
+                out.put(name, values);
+            }
+        });
+        return out;
     }
 }

@@ -11,6 +11,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] – 2026-04-23
+
+### Added
+
+- `reactive.http.correlation-id.max-length` (default `128`). Inbound `X-Correlation-Id`
+  values longer than the limit, or containing CR / LF / other ISO control characters,
+  are now dropped with a DEBUG log and never stored in the Reactor context or
+  propagated outbound. Prevents log-forgery and context-bloat via malicious upstream
+  callers. (Roadmap 3.1)
+- `reactive.http.inbound-headers.allow-list` and `reactive.http.inbound-headers.deny-list`.
+  `InboundHeadersWebFilter` now filters the inbound-header snapshot before storing it
+  in the Reactor context: if the allow-list is non-empty only those headers are
+  captured, and any captured header whose name matches the deny-list has its value
+  replaced with `[REDACTED]`. Deny-list defaults to the shared
+  `SensitiveHeaders.DEFAULTS` list (`Authorization`, `Cookie`, `Set-Cookie`,
+  `Proxy-Authorization`, `X-Api-Key`). (Roadmap 3.7)
+- `SensitiveHeaders` utility consolidating the credential / session-cookie deny-list
+  used by `DefaultHttpExchangeLogger` and `InboundHeadersWebFilter`.
+- **Per-client connection-pool overrides.** `reactive.http.clients.<name>.pool.*`
+  now accepts every field of the global `reactive.http.network.connection-pool`
+  block. When set the client-level block replaces the global one wholesale (no
+  field-level merging). Leaving it unset inherits the global pool, preserving
+  prior behaviour. (Roadmap 1.4)
+- Connection-pool idle / lifetime eviction knobs on both the global and
+  per-client `connection-pool` blocks: `max-idle-time-ms`, `max-life-time-ms`,
+  `evict-in-background-ms`. All default to `0` (disabled), preserving prior
+  Reactor Netty behaviour. Set behind load balancers that silently drop
+  long-idle sockets to avoid handing out half-dead pooled connections. (Roadmap 1.4)
+- `reactive.http.network.connection-pool.metrics-enabled` (default `false`).
+  When flipped on and a `MeterRegistry` bean is present, the `ConnectionProvider`
+  publishes Reactor Netty's built-in pool gauges
+  (`reactor.netty.connection.provider.total.connections`,
+  `.active.connections`, `.idle.connections`, `.pending.connections`) tagged by
+  the pool name. (Roadmap 1.6 pool gauges / 2.1a)
+- Resilience4j Micrometer auto-binding. When
+  `io.github.resilience4j:resilience4j-micrometer` is on the classpath **and**
+  a `CircuitBreakerRegistry` / `RetryRegistry` / `BulkheadRegistry` bean is
+  present alongside a `MeterRegistry`, the starter registers
+  `TaggedCircuitBreakerMetrics` / `TaggedRetryMetrics` /
+  `TaggedBulkheadMetrics` as `MeterBinder` beans (names
+  `reactiveHttpCircuitBreakerMeterBinder` / `reactiveHttpRetryMeterBinder` /
+  `reactiveHttpBulkheadMeterBinder`). Each binding is skipped independently
+  when its dedicated registry is absent; users can override a specific
+  binding by declaring a `MeterBinder` bean with the matching name. (Roadmap 2.1b)
+- Request / response body-size metrics. `HttpClientObserverEvent` now carries
+  `requestBytes` and `responseBytes` (both `long`, `-1` / `UNKNOWN_SIZE` when
+  not measurable), and `MicrometerHttpClientObserver` emits
+  `http.client.requests.request.size` and
+  `http.client.requests.response.size` `DistributionSummary` meters tagged
+  with `client.name`, `api.name`, `http.method`, `uri`. Request size is
+  measured for `byte[]` / `String` / `CharSequence` / `null` bodies; arbitrary
+  objects are left unmeasured to avoid double-serialisation. Response size is
+  read from `Content-Length`; chunked / headerless responses are skipped.
+  (Roadmap 2.2)
+- `HttpClientHealthIndicator`. When `spring-boot-actuator` is on the classpath
+  and a `MeterRegistry` bean is present, the starter auto-registers a health
+  indicator that reads the existing `http.client.requests` timers and reports
+  per-client error rates computed from probe-to-probe deltas. New properties:
+  `reactive.http.observability.health.enabled` (default `true`),
+  `.error-rate-threshold` (default `0.5`), `.min-samples` (default `10`). The
+  indicator does not implement `HttpClientObserver`, so the existing
+  `@ConditionalOnMissingBean(HttpClientObserver.class)` override contract is
+  preserved. Added `spring-boot-actuator` as an optional dependency.
+  (Roadmap 1.6)
+- **Multipart / form-data request encoding.** New annotations:
+  `@MultipartBody` (method), `@FormField` (scalar / multi-value text part),
+  `@FormFile` (file part — accepts `byte[]`, any
+  `org.springframework.core.io.Resource`, or the new `FileAttachment`
+  convenience record carrying bytes + filename + content-type). The starter
+  builds the `multipart/form-data` body via Spring's `MultipartBodyBuilder`;
+  the boundary-bearing `Content-Type` is generated automatically.
+  Combining `@MultipartBody` with `@Body`, or using `@FormField` /
+  `@FormFile` without `@MultipartBody`, is rejected at metadata-parse time.
+  (Roadmap 1.2)
+- **Built-in OAuth 2.0 client-credentials token provider.**
+  `OAuth2ClientCredentialsTokenProvider` implements `AccessTokenProvider`
+  and posts the standard {@code grant_type=client_credentials} flow to the
+  configured token endpoint. Supports both client-authentication schemes
+  (HTTP Basic — default — and `client_id`/`client_secret` form post via
+  `authStyle(AuthStyle.FORM_POST)`); forwards optional `scope` / `audience`
+  parameters; converts the server's `expires_in` into an
+  `AccessToken.expiresAt()` minus a configurable `expiryLeeway` (default
+  30 s). Compose with `RefreshingBearerAuthProvider` for caching +
+  single-in-flight refresh. (Roadmap 1.7 — OAuth2 half. AWS SigV4
+  intentionally deferred.)
+- **`reactive-http-client-test` artifact.** New companion module
+  containing `MockReactiveHttpClient<T>` (builds a real
+  `@ReactiveHttpClient` proxy against an in-process `ExchangeFunction`,
+  records every outbound exchange, and serves canned responses by matcher),
+  `RecordedExchange` (materialised request snapshot — method, URI,
+  headers, UTF-8 body), and `ErrorCategoryAssertions` (fluent
+  `assertThatFails(mono).hasErrorCategory(...).hasStatusCode(...)` helper).
+  Pulls `spring-test` as a compile dep so consumers don't need to add it
+  themselves. (Roadmap 1.3)
+- Canonical safety-net timeout property names
+  `reactive.http.network.network-read-timeout-ms` and
+  `reactive.http.network.network-write-timeout-ms`. Existing `read-timeout-ms` /
+  `write-timeout-ms` keys continue to bind to the same backing fields and are
+  now flagged as deprecated configuration properties — IDEs will show the
+  replacement. README §2.5 now includes a "which timeout fires first" matrix
+  distinguishing the channel-level safety nets from per-request
+  `@TimeoutMs` / `resilience.timeout-ms` values. (Roadmap 2.4)
+
+### Deprecated
+
+- `reactive.http.network.read-timeout-ms` and `reactive.http.network.write-timeout-ms`
+  — use `network-read-timeout-ms` / `network-write-timeout-ms` instead. Both keys
+  bind to the same backing field, so existing configuration continues to work.
+
+### Fixed
+
+- **`WebClientCustomizer` beans are now applied to every `@ReactiveHttpClient`
+  proxy.** The 1.8.1 prototype-scope fix for the auth-header leak inadvertently
+  stopped running `WebClientCustomizer` beans — our `starterWebClientBuilder()`
+  returned a bare `WebClient.builder()` without applying customizers. This mirrors
+  Spring Boot's own `WebClientAutoConfiguration` pattern: the prototype bean now
+  takes `ObjectProvider<WebClientCustomizer>` and applies each in `@Order` before
+  handing the builder to the factory. Users who lost Sleuth / Micrometer / custom
+  instrumentation on upgrade to 1.8.1 will regain it. (Roadmap 3.9)
+
+### Security
+
+- Inbound headers captured by `InboundHeadersWebFilter` and logged via
+  `HttpExchangeLogContext#inboundHeaders()` are now subject to the same redaction
+  rules as outbound headers, closing a leakage path introduced in 1.8.0 where
+  upstream-supplied credentials could land in log aggregation.
+- Correlation-id length and character-set validation prevent log forgery and
+  Reactor-context bloat via oversized or control-character-laden inbound values.
+
+---
+
 ## [1.8.1] – 2026-04-23
 
 ### Fixed

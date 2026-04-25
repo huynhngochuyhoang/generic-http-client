@@ -71,7 +71,13 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         }
 
         AuthProvider authProvider = resolveAuthProvider(clientName, config);
-        WebClient webClient = buildWebClient(baseUrl, config, properties.getNetwork(), clientName, authProvider);
+        WebClient webClient = buildWebClient(
+                baseUrl,
+                config,
+                properties.getNetwork(),
+                properties.getCorrelationId(),
+                clientName,
+                authProvider);
 
         MethodMetadataCache metadataCache = applicationContext
                 .getBeanProvider(MethodMetadataCache.class)
@@ -144,27 +150,38 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     private WebClient buildWebClient(String baseUrl,
                                      ReactiveHttpClientProperties.ClientConfig config,
                                      ReactiveHttpClientProperties.NetworkConfig networkConfig,
+                                     ReactiveHttpClientProperties.CorrelationIdConfig correlationIdConfig,
                                      String clientName,
                                      AuthProvider authProvider) {
         ReactiveHttpClientProperties.NetworkConfig resolvedNetworkConfig = networkConfig != null
                 ? networkConfig
                 : new ReactiveHttpClientProperties.NetworkConfig();
-        ReactiveHttpClientProperties.ConnectionPoolConfig pool = resolvedNetworkConfig.getConnectionPool() != null
-                ? resolvedNetworkConfig.getConnectionPool()
-                : new ReactiveHttpClientProperties.ConnectionPoolConfig();
-        ConnectionProvider connectionProvider = ConnectionProvider.builder("reactive-http-client-" + clientName)
+        ReactiveHttpClientProperties.ConnectionPoolConfig pool = resolveConnectionPool(config, resolvedNetworkConfig);
+        ConnectionProvider.Builder providerBuilder = ConnectionProvider.builder("reactive-http-client-" + clientName)
                 .maxConnections(Math.max(1, pool.getMaxConnections()))
-                .pendingAcquireTimeout(Duration.ofMillis(Math.max(0, pool.getPendingAcquireTimeoutMs())))
-                .build();
+                .pendingAcquireTimeout(Duration.ofMillis(Math.max(0, pool.getPendingAcquireTimeoutMs())));
+        if (pool.getMaxIdleTimeMs() > 0) {
+            providerBuilder.maxIdleTime(Duration.ofMillis(pool.getMaxIdleTimeMs()));
+        }
+        if (pool.getMaxLifeTimeMs() > 0) {
+            providerBuilder.maxLifeTime(Duration.ofMillis(pool.getMaxLifeTimeMs()));
+        }
+        if (pool.getEvictInBackgroundMs() > 0) {
+            providerBuilder.evictInBackground(Duration.ofMillis(pool.getEvictInBackgroundMs()));
+        }
+        if (pool.isMetricsEnabled()) {
+            providerBuilder.metrics(true);
+        }
+        ConnectionProvider connectionProvider = providerBuilder.build();
 
         HttpClient httpClient = HttpClient.create(connectionProvider)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, resolvedNetworkConfig.getConnectTimeoutMs())
                 .doOnConnected(connection -> {
                     // Safety-net handlers: fire if a connection gets stuck in the pool beyond the configured limit.
                     connection.addHandlerLast(new ReadTimeoutHandler(
-                            resolvedNetworkConfig.getReadTimeoutMs(), TimeUnit.MILLISECONDS));
+                            resolvedNetworkConfig.getNetworkReadTimeoutMs(), TimeUnit.MILLISECONDS));
                     connection.addHandlerLast(new WriteTimeoutHandler(
-                            resolvedNetworkConfig.getWriteTimeoutMs(), TimeUnit.MILLISECONDS));
+                            resolvedNetworkConfig.getNetworkWriteTimeoutMs(), TimeUnit.MILLISECONDS));
                 })
                 .compress(config.isCompressionEnabled());
         WebClient.Builder builder = applicationContext
@@ -175,7 +192,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 .baseUrl(baseUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(resolveCodecMaxInMemorySizeBytes(config)))
-                .filter(correlationIdFilter());
+                .filter(correlationIdFilter(correlationIdConfig));
 
         if (authProvider != null) {
             configured = configured.filter(new OutboundAuthFilter(clientName, authProvider));
@@ -186,6 +203,17 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         }
 
         return configured.build();
+    }
+
+    private ReactiveHttpClientProperties.ConnectionPoolConfig resolveConnectionPool(
+            ReactiveHttpClientProperties.ClientConfig config,
+            ReactiveHttpClientProperties.NetworkConfig networkConfig) {
+        if (config != null && config.getPool() != null) {
+            return config.getPool();
+        }
+        return networkConfig.getConnectionPool() != null
+                ? networkConfig.getConnectionPool()
+                : new ReactiveHttpClientProperties.ConnectionPoolConfig();
     }
 
     private int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
@@ -201,8 +229,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     }
 
     /** Propagates X-Correlation-Id from Reactor context (set by CorrelationIdWebFilter) or MDC. */
-    private ExchangeFilterFunction correlationIdFilter() {
-        return CorrelationIdWebFilter.exchangeFilter();
+    private ExchangeFilterFunction correlationIdFilter(ReactiveHttpClientProperties.CorrelationIdConfig correlationIdConfig) {
+        return CorrelationIdWebFilter.exchangeFilter(correlationIdConfig);
     }
 
     /** Logs method, URL, status and latency when exchange logging is enabled for the client. */

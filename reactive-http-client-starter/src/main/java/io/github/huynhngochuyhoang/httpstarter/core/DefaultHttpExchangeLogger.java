@@ -5,9 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Default implementation that logs both request and response details.
@@ -17,13 +15,6 @@ public class DefaultHttpExchangeLogger implements HttpExchangeLogger {
     private static final Logger log = LoggerFactory.getLogger(DefaultHttpExchangeLogger.class);
     private static final String REDACTED = "[REDACTED]";
     private static final String OMITTED = "[OMITTED]";
-    private static final Set<String> SENSITIVE_HEADERS = Set.of(
-            "authorization",
-            "cookie",
-            "set-cookie",
-            "proxy-authorization",
-            "x-api-key"
-    );
 
     @Override
     public void log(HttpExchangeLogContext context) {
@@ -69,17 +60,13 @@ public class DefaultHttpExchangeLogger implements HttpExchangeLogger {
 
     private Map<String, String> redactRequestHeaders(Map<String, String> headers) {
         Map<String, String> redacted = new LinkedHashMap<>();
-        headers.forEach((name, value) -> redacted.put(name, isSensitive(name) ? REDACTED : value));
+        headers.forEach((name, value) -> redacted.put(name, SensitiveHeaders.isSensitive(name) ? REDACTED : value));
         return redacted;
     }
 
     private Map<String, List<String>> redactResponseHeaders(Map<String, List<String>> headers) {
         Map<String, List<String>> redacted = new LinkedHashMap<>();
-        headers.forEach((name, values) -> redacted.put(name, isSensitive(name) ? List.of(REDACTED) : values));
+        headers.forEach((name, values) -> redacted.put(name, SensitiveHeaders.isSensitive(name) ? List.of(REDACTED) : values));
         return redacted;
-    }
-
-    private boolean isSensitive(String headerName) {
-        return headerName != null && SENSITIVE_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
     }
 }

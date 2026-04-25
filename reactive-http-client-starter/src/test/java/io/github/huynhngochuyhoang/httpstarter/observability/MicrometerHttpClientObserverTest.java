@@ -2,12 +2,14 @@ package io.github.huynhngochuyhoang.httpstarter.observability;
 
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class MicrometerHttpClientObserverTest {
 
@@ -121,5 +123,79 @@ class MicrometerHttpClientObserverTest {
                 .timer();
         assertNotNull(timer);
         assertEquals(1, timer.count(), 0.0d);
+    }
+
+    @Test
+    void recordsRequestAndResponseSizeDistributionsWhenSizesAreKnown() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "POST", "/users",
+                201, 5, null, null, null, null,
+                1, 128L, 256L
+        ));
+
+        DistributionSummary requestSize = meterRegistry.find("http.client.requests.request.size")
+                .tag("client.name", "user-service")
+                .summary();
+        DistributionSummary responseSize = meterRegistry.find("http.client.requests.response.size")
+                .tag("client.name", "user-service")
+                .summary();
+
+        assertNotNull(requestSize);
+        assertEquals(1, requestSize.count());
+        assertEquals(128.0d, requestSize.totalAmount(), 0.0d);
+
+        assertNotNull(responseSize);
+        assertEquals(1, responseSize.count());
+        assertEquals(256.0d, responseSize.totalAmount(), 0.0d);
+    }
+
+    @Test
+    void skipsSizeDistributionsWhenSizesAreUnknown() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 5, null, null, null, null,
+                1, HttpClientObserverEvent.UNKNOWN_SIZE, HttpClientObserverEvent.UNKNOWN_SIZE
+        ));
+
+        assertNull(meterRegistry.find("http.client.requests.request.size").summary(),
+                "unknown request size must not create a distribution summary meter");
+        assertNull(meterRegistry.find("http.client.requests.response.size").summary(),
+                "unknown response size must not create a distribution summary meter");
+    }
+
+    @Test
+    void recordsZeroSizedRequestBodyExplicitly() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 5, null, null, null, null,
+                1, 0L, 0L
+        ));
+
+        DistributionSummary requestSize = meterRegistry.find("http.client.requests.request.size").summary();
+        DistributionSummary responseSize = meterRegistry.find("http.client.requests.response.size").summary();
+
+        assertNotNull(requestSize);
+        assertEquals(1, requestSize.count(),
+                "null / empty bodies must still be recorded as 0 bytes, not dropped");
+        assertNotNull(responseSize);
+        assertEquals(1, responseSize.count());
     }
 }

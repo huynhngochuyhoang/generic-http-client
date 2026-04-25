@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.huynhngochuyhoang</groupId>
+        <artifactId>reactive-http-client</artifactId>
+        <version>1.9.0</version>
+    </parent>
+
+    <artifactId>reactive-http-client-test</artifactId>
+    <name>reactive-http-client-test</name>
+    <description>Test helpers for the reactive-http-client-starter: proxy builders, exchange recorders, and assertion helpers for @ReactiveHttpClient interfaces.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.huynhngochuyhoang</groupId>
+            <artifactId>reactive-http-client-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- WebFlux (WebClient) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+        </dependency>
+
+        <!-- Reactor -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
+        <!-- spring-test for MockClientHttpRequest (compile scope: this module is test-helper code) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+        </dependency>
+
+        <!-- AssertJ – for ErrorCategoryAssertions -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

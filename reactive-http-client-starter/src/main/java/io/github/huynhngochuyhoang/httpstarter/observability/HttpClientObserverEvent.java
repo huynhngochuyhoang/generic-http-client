@@ -10,6 +10,9 @@ import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
  */
 public final class HttpClientObserverEvent {
 
+    /** Sentinel for {@link #getRequestBytes()} / {@link #getResponseBytes()} when size could not be measured. */
+    public static final long UNKNOWN_SIZE = -1L;
+
     private final String clientName;
     private final String apiName;
     private final String httpMethod;
@@ -21,6 +24,8 @@ public final class HttpClientObserverEvent {
     private final Object requestBody;
     private final Object responseBody;
     private final int attemptCount;
+    private final long requestBytes;
+    private final long responseBytes;
 
     /**
      * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object)}
@@ -54,6 +59,13 @@ public final class HttpClientObserverEvent {
         this(clientName, apiName, httpMethod, uriPath, statusCode, durationMs, error, errorCategory, requestBody, responseBody, 1);
     }
 
+    /**
+     * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object, int, long, long)}
+     * to carry request / response byte sizes. This constructor defaults both sizes to
+     * {@link #UNKNOWN_SIZE}, so the Micrometer observer will skip the size
+     * distribution summaries for events constructed this way.
+     */
+    @Deprecated(since = "1.9.0", forRemoval = false)
     public HttpClientObserverEvent(
             String clientName,
             String apiName,
@@ -66,6 +78,24 @@ public final class HttpClientObserverEvent {
             Object requestBody,
             Object responseBody,
             int attemptCount) {
+        this(clientName, apiName, httpMethod, uriPath, statusCode, durationMs, error, errorCategory,
+                requestBody, responseBody, attemptCount, UNKNOWN_SIZE, UNKNOWN_SIZE);
+    }
+
+    public HttpClientObserverEvent(
+            String clientName,
+            String apiName,
+            String httpMethod,
+            String uriPath,
+            Integer statusCode,
+            long durationMs,
+            Throwable error,
+            ErrorCategory errorCategory,
+            Object requestBody,
+            Object responseBody,
+            int attemptCount,
+            long requestBytes,
+            long responseBytes) {
         this.clientName = clientName;
         this.apiName = apiName;
         this.httpMethod = httpMethod;
@@ -77,6 +107,8 @@ public final class HttpClientObserverEvent {
         this.requestBody = requestBody;
         this.responseBody = responseBody;
         this.attemptCount = attemptCount;
+        this.requestBytes = requestBytes;
+        this.responseBytes = responseBytes;
     }
 
     /** The logical name of the client (value of {@code @ReactiveHttpClient(name = ...)}). */
@@ -122,6 +154,20 @@ public final class HttpClientObserverEvent {
      * Useful for detecting whether a downstream service is degraded.
      */
     public int getAttemptCount() { return attemptCount; }
+
+    /**
+     * Size of the serialised request body in bytes, or {@link #UNKNOWN_SIZE} when the
+     * starter could not measure it cheaply (i.e. body is a non-{@code byte[]}/{@code String}
+     * object whose serialized form isn't materialised synchronously on the invocation path).
+     */
+    public long getRequestBytes() { return requestBytes; }
+
+    /**
+     * Size of the response body in bytes as advertised by the server via
+     * {@code Content-Length}. {@link #UNKNOWN_SIZE} when the header was absent (e.g.
+     * chunked transfer encoding or no body).
+     */
+    public long getResponseBytes() { return responseBytes; }
 
     /** {@code true} when {@link #getError()} is non-null. */
     public boolean isError() { return error != null; }

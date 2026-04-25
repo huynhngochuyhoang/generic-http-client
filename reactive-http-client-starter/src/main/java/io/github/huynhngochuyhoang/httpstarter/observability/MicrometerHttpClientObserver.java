@@ -1,11 +1,9 @@
 package io.github.huynhngochuyhoang.httpstarter.observability;
 
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
-import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +20,21 @@ import java.util.concurrent.TimeUnit;
  *     <td>{@code http.client.requests} (configurable)</td>
  *     <td>Timer (also exposes count + sum)</td>
  *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@code http.client.requests.attempts}</td>
+ *     <td>DistributionSummary (subscription attempts per invocation)</td>
+ *     <td>client.name, api.name, http.method, uri</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@code http.client.requests.request.size}</td>
+ *     <td>DistributionSummary (request body bytes; only recorded when measurable — byte[]/String/null bodies)</td>
+ *     <td>client.name, api.name, http.method, uri</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@code http.client.requests.response.size}</td>
+ *     <td>DistributionSummary (response body bytes from {@code Content-Length}; skipped for chunked responses)</td>
+ *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  * </table>
  *
@@ -88,6 +101,15 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             );
             meterRegistry.summary(config.getMetricName() + ".attempts", attemptTags)
                     .record(event.getAttemptCount());
+
+            if (event.getRequestBytes() >= 0) {
+                meterRegistry.summary(config.getMetricName() + ".request.size", attemptTags)
+                        .record(event.getRequestBytes());
+            }
+            if (event.getResponseBytes() >= 0) {
+                meterRegistry.summary(config.getMetricName() + ".response.size", attemptTags)
+                        .record(event.getResponseBytes());
+            }
 
             if (log.isDebugEnabled()) {
                 log.debug("[observability] {} {} {} -> {} ({}ms)",

@@ -1,5 +1,6 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import io.github.huynhngochuyhoang.httpstarter.annotation.FormFile;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthRequest;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
@@ -17,11 +18,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.codec.DecodingException;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -147,6 +155,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
 
         RequestArgumentResolver.ResolvedArgs resolved = argumentResolver.resolve(meta, args);
+        long requestBytes = measureRequestBodyBytes(resolved.body());
 
         AtomicLong start = new AtomicLong();
         AtomicBoolean firstAttempt = new AtomicBoolean(true);
@@ -171,6 +180,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         WebClient.RequestBodySpec baseRequestSpec = requestSpec;
 
         long timeoutMs = resolveTimeoutMs(meta);
+
+        final MultiValueMap<String, HttpEntity<?>> multipartBody = meta.isMultipart()
+                ? buildMultipartBody(meta, args)
+                : null;
+
         // Cache the serialized body so retries reuse the bytes without re-serializing.
         Mono<SerializedRequestBody> serializedBodyMono = serializeRequestBodyForAuth(resolved.body(), contentTypeHeader).cache();
         Mono<WebClient.RequestHeadersSpec<?>> requestHeadersSpecMono = serializedBodyMono
@@ -186,7 +200,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     resolved.headers().forEach(preparedRequestSpec::header);
 
                     WebClient.RequestHeadersSpec<?> requestHeadersSpec;
-                    if (serializedRequestBody.originalBody() != null) {
+                    if (multipartBody != null) {
+                        requestHeadersSpec = preparedRequestSpec.body(BodyInserters.fromMultipartData(multipartBody));
+                    } else if (serializedRequestBody.originalBody() != null) {
                         WebClient.RequestBodySpec requestWithBodySpec = preparedRequestSpec;
                         if (!hasContentTypeHeader) {
                             requestWithBodySpec = requestWithBodySpec.contentType(MediaType.APPLICATION_JSON);
@@ -242,12 +258,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 .doOnTerminate(() -> {
                     if (reported.compareAndSet(false, true))
                         reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
-                                responseStatus.get(), responseHeaders.get(), null, terminalError.get(), inboundHeadersRef.get(), attemptCount.get());
+                                responseStatus.get(), responseHeaders.get(), null, terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 })
                 .doOnCancel(() -> {
                     if (reported.compareAndSet(false, true))
                         reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
-                                responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get());
+                                responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 });
             }
             return flux;
@@ -289,12 +305,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             .doOnTerminate(() -> {
                 if (reported.compareAndSet(false, true))
                     reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
-                            responseStatus.get(), responseHeaders.get(), terminalBody.get(), terminalError.get(), inboundHeadersRef.get(), attemptCount.get());
+                            responseStatus.get(), responseHeaders.get(), terminalBody.get(), terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             })
             .doOnCancel(() -> {
                 if (reported.compareAndSet(false, true))
                     reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
-                            responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get());
+                            responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             });
         }
         return mono;
@@ -564,12 +580,14 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             Object responseBody,
             Throwable error,
             Map<String, List<String>> inboundHeaders,
-            int attemptCount) {
+            int attemptCount,
+            long requestBytes) {
         if (exchangeLogger != null) {
             logExchange(exchangeLogger, meta, resolved, startMs, statusCode, responseHeaders, responseBody, error, inboundHeaders);
         }
         if (observer != null) {
-            notifyObserver(observer, meta, resolved, startMs, statusCode, error, responseBody, attemptCount);
+            long responseBytes = extractContentLengthBytes(responseHeaders);
+            notifyObserver(observer, meta, resolved, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
         }
     }
 
@@ -625,7 +643,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             HttpStatusCode statusCode,
             Throwable error,
             Object responseBody,
-            int attemptCount) {
+            int attemptCount,
+            long requestBytes,
+            long responseBytes) {
         try {
             boolean logBody = observabilityConfig != null && observabilityConfig.isLogRequestBody();
             boolean logRespBody = observabilityConfig != null && observabilityConfig.isLogResponseBody();
@@ -640,11 +660,152 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     resolveErrorCategory(statusCode, error),
                     logBody ? resolved.body() : null,
                     logRespBody ? responseBody : null,
-                    attemptCount
+                    attemptCount,
+                    requestBytes,
+                    responseBytes
             ));
         } catch (Exception e) {
             log.warn("HttpClientObserver threw an exception – ignoring: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Builds a {@link MultiValueMap} of multipart parts from {@code @FormField} /
+     * {@code @FormFile} parameter values. Unsupported value types fail fast with a
+     * descriptive {@link IllegalArgumentException}; null values skip the part.
+     */
+    private static MultiValueMap<String, HttpEntity<?>> buildMultipartBody(MethodMetadata meta, Object[] args) {
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+
+        meta.getFormFieldParams().forEach((idx, name) -> {
+            if (args == null || idx >= args.length) return;
+            Object value = args[idx];
+            if (value == null) return;
+            if (value instanceof java.util.Collection<?> collection) {
+                for (Object item : collection) {
+                    if (item != null) builder.part(name, String.valueOf(item));
+                }
+            } else if (value.getClass().isArray()) {
+                int len = java.lang.reflect.Array.getLength(value);
+                for (int i = 0; i < len; i++) {
+                    Object item = java.lang.reflect.Array.get(value, i);
+                    if (item != null) builder.part(name, String.valueOf(item));
+                }
+            } else {
+                builder.part(name, String.valueOf(value));
+            }
+        });
+
+        meta.getFormFileParams().forEach((idx, annotation) -> {
+            if (args == null || idx >= args.length) return;
+            Object value = args[idx];
+            if (value == null) return;
+            addFilePart(builder, annotation, value);
+        });
+
+        return builder.build();
+    }
+
+    private static void addFilePart(MultipartBodyBuilder builder, FormFile annotation, Object value) {
+        String name = annotation.value();
+        String fallbackFilename = StringUtils.hasText(annotation.filename()) ? annotation.filename() : name;
+        MediaType fallbackContentType = parseMediaTypeOrOctetStream(annotation.contentType());
+
+        if (value instanceof Resource resource) {
+            MultipartBodyBuilder.PartBuilder part = builder.part(name, resource, fallbackContentType);
+            if (resource.getFilename() == null) {
+                part.headers(h -> h.setContentDisposition(ContentDisposition.formData()
+                        .name(name)
+                        .filename(fallbackFilename)
+                        .build()));
+            }
+            return;
+        }
+        if (value instanceof byte[] bytes) {
+            ByteArrayResource resource = new ByteArrayResource(bytes) {
+                @Override
+                public String getFilename() {
+                    return fallbackFilename;
+                }
+            };
+            builder.part(name, resource, fallbackContentType);
+            return;
+        }
+        if (value instanceof FileAttachment attachment) {
+            byte[] content = attachment.content() != null ? attachment.content() : new byte[0];
+            String filename = StringUtils.hasText(attachment.filename()) ? attachment.filename() : fallbackFilename;
+            MediaType contentType = StringUtils.hasText(attachment.contentType())
+                    ? parseMediaTypeOrOctetStream(attachment.contentType())
+                    : fallbackContentType;
+            ByteArrayResource resource = new ByteArrayResource(content) {
+                @Override
+                public String getFilename() {
+                    return filename;
+                }
+            };
+            builder.part(name, resource, contentType);
+            return;
+        }
+        throw new IllegalArgumentException(
+                "@FormFile parameter '" + name + "' must be byte[], Resource, or FileAttachment; got "
+                        + value.getClass().getName());
+    }
+
+    private static MediaType parseMediaTypeOrOctetStream(String value) {
+        if (!StringUtils.hasText(value)) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        try {
+            return MediaType.parseMediaType(value);
+        } catch (Exception ignored) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
+    /**
+     * Best-effort request body size measurement. Returns the byte count for
+     * {@code byte[]} and {@code String} bodies, {@code 0} for {@code null}, and
+     * {@link HttpClientObserverEvent#UNKNOWN_SIZE} for arbitrary objects whose
+     * serialised form isn't materialised synchronously on the invocation path.
+     */
+    private static long measureRequestBodyBytes(Object body) {
+        if (body == null) {
+            return 0L;
+        }
+        if (body instanceof byte[] bytes) {
+            return bytes.length;
+        }
+        if (body instanceof CharSequence charSequence) {
+            return charSequence.toString().getBytes(StandardCharsets.UTF_8).length;
+        }
+        return HttpClientObserverEvent.UNKNOWN_SIZE;
+    }
+
+    /**
+     * Extracts the {@code Content-Length} header value from the captured response
+     * headers. Returns {@link HttpClientObserverEvent#UNKNOWN_SIZE} if the header is
+     * absent (e.g. chunked transfer encoding, empty body, network failure before
+     * response).
+     */
+    private static long extractContentLengthBytes(Map<String, List<String>> responseHeaders) {
+        if (responseHeaders == null || responseHeaders.isEmpty()) {
+            return HttpClientObserverEvent.UNKNOWN_SIZE;
+        }
+        for (Map.Entry<String, List<String>> entry : responseHeaders.entrySet()) {
+            if (HttpHeaders.CONTENT_LENGTH.equalsIgnoreCase(entry.getKey())) {
+                List<String> values = entry.getValue();
+                if (values == null || values.isEmpty()) {
+                    return HttpClientObserverEvent.UNKNOWN_SIZE;
+                }
+                try {
+                    long parsed = Long.parseLong(values.get(0).trim());
+                    return parsed >= 0 ? parsed : HttpClientObserverEvent.UNKNOWN_SIZE;
+                } catch (NumberFormatException ignored) {
+                    return HttpClientObserverEvent.UNKNOWN_SIZE;
+                }
+            }
+        }
+        return HttpClientObserverEvent.UNKNOWN_SIZE;
     }
 
     private ErrorCategory resolveErrorCategory(HttpStatusCode statusCode, Throwable error) {
