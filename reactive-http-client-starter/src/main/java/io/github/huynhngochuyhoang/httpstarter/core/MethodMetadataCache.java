@@ -140,7 +140,30 @@ public class MethodMetadataCache {
             meta.setTimeoutMs(timeoutMs.value());
         }
 
+        Retry retry = method.getAnnotation(Retry.class);
+        if (retry != null) {
+            requireNonBlankAnnotationValue(retry.value(), "@Retry", method);
+            meta.setRetryInstanceName(retry.value());
+        }
+        CircuitBreaker circuitBreaker = method.getAnnotation(CircuitBreaker.class);
+        if (circuitBreaker != null) {
+            requireNonBlankAnnotationValue(circuitBreaker.value(), "@CircuitBreaker", method);
+            meta.setCircuitBreakerInstanceName(circuitBreaker.value());
+        }
+        Bulkhead bulkhead = method.getAnnotation(Bulkhead.class);
+        if (bulkhead != null) {
+            requireNonBlankAnnotationValue(bulkhead.value(), "@Bulkhead", method);
+            meta.setBulkheadInstanceName(bulkhead.value());
+        }
+
         meta.freezeCollections();
         return meta;
+    }
+
+    private static void requireNonBlankAnnotationValue(String value, String annotationName, Method method) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    annotationName + " value must not be blank on method: " + method);
+        }
     }
 }

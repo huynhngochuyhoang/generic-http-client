@@ -11,6 +11,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.0] – 2026-05-01
+
+### Added
+
+- **`reactive-http-client-otel` artifact.** New companion module providing
+  `OpenTelemetryHttpClientObserver`, an `HttpClientObserver` that records each
+  outbound HTTP exchange as an OTel `CLIENT` span using the standard semantic
+  conventions: `http.request.method`, `http.response.status_code`,
+  `url.template`, `error.type` (mapped from `ErrorCategory`, falling back to the
+  exception's simple class name), plus starter-specific
+  `rhttp.client.name` / `rhttp.api.name` / `rhttp.attempt.count` /
+  `rhttp.request.bytes` / `rhttp.response.bytes` attributes. Span name follows
+  the OTel low-cardinality recommendation (`<METHOD> <api.name>`). Activated
+  under `reactive.http.observability.otel.enabled` (default `true` when the
+  OTel API is on the classpath and an `OpenTelemetry` bean is available).
+  Auto-configured via `META-INF/spring/...AutoConfiguration.imports`; gated on
+  `@ConditionalOnMissingBean(HttpClientObserver.class)` so it shuts off the
+  Micrometer observer when both modules are on the classpath. (Roadmap 1.1)
+- **Per-method resilience overrides.** New `@Retry`, `@CircuitBreaker`,
+  `@Bulkhead` annotations select a specific Resilience4j instance by name on
+  one method, taking precedence over the client-level
+  `reactive.http.clients.<name>.resilience.*` setting. The factory bean
+  validates referenced names at proxy-construction time via the new
+  `ResilienceOperatorApplier.isInstanceConfigured(...)` hook and fails fast
+  with a descriptive `IllegalStateException` when an instance is missing.
+  (Roadmap 1.9)
+- **HTTP proxy and TLS / mTLS configuration.** Two new sub-configs:
+  `reactive.http.network.proxy.*` (HTTP / HTTPS / SOCKS4 / SOCKS5, optional
+  username/password, `nonProxyHosts` regex) and
+  `reactive.http.network.tls.*` (truststore + keystore via Spring's
+  `DefaultResourceLoader`, configurable protocols / ciphers, plus an
+  `insecure-trust-all` flag for development that emits a startup WARN).
+  Both also accept per-client overrides under
+  `reactive.http.clients.<name>.proxy.*` / `.tls.*` — the override replaces
+  the global block wholesale (no field-level merging). (Roadmap 1.5)
+- **Streaming response passthrough.** Methods declaring
+  `Flux<DataBuffer>` or `Mono<ResponseEntity<Flux<DataBuffer>>>` skip the
+  in-memory codec entirely, so payloads larger than
+  `codec-max-in-memory-size-mb` are streamed without a
+  `DataBufferLimitException`. The `ResponseEntity` variant exposes the
+  upstream status and headers alongside the streaming body for proxy /
+  pass-through use cases. (Roadmap 1.8)
+- **Configurable correlation-id MDC fallback keys.**
+  `reactive.http.correlation-id.mdc-keys` replaces the previously hard-coded
+  list (`correlationId`, `X-Correlation-Id`, `traceId`) with a configurable
+  one — useful for Zipkin's `X-B3-TraceId`, Jaeger's `uber-trace-id`, or any
+  custom tracing key. An empty list disables the MDC fallback entirely.
+  Defaults preserve the prior list. (Roadmap 1.10)
+
+---
+
 ## [1.9.0] – 2026-04-23
 
 ### Added
@@ -385,7 +436,9 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.6.0...v1.7.0

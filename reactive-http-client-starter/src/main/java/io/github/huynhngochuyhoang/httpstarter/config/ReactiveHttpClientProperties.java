@@ -103,6 +103,10 @@ public class ReactiveHttpClientProperties {
         private int networkReadTimeoutMs = 60_000;
         private int networkWriteTimeoutMs = 60_000;
         private ConnectionPoolConfig connectionPool = new ConnectionPoolConfig();
+        /** Optional global proxy applied to every client. {@code null} = direct connection. */
+        private ProxyConfig proxy;
+        /** Optional global TLS configuration applied to every client. {@code null} = JDK defaults. */
+        private TlsConfig tls;
 
         public int getConnectTimeoutMs() { return connectTimeoutMs; }
         public void setConnectTimeoutMs(int connectTimeoutMs) { this.connectTimeoutMs = connectTimeoutMs; }
@@ -147,6 +151,12 @@ public class ReactiveHttpClientProperties {
 
         public ConnectionPoolConfig getConnectionPool() { return connectionPool; }
         public void setConnectionPool(ConnectionPoolConfig connectionPool) { this.connectionPool = connectionPool; }
+
+        public ProxyConfig getProxy() { return proxy; }
+        public void setProxy(ProxyConfig proxy) { this.proxy = proxy; }
+
+        public TlsConfig getTls() { return tls; }
+        public void setTls(TlsConfig tls) { this.tls = tls; }
     }
 
     public static class ConnectionPoolConfig {
@@ -188,6 +198,131 @@ public class ReactiveHttpClientProperties {
         public void setMetricsEnabled(boolean metricsEnabled) { this.metricsEnabled = metricsEnabled; }
     }
 
+    // ---- HTTP proxy configuration ----
+
+    /**
+     * Routes outbound calls through an HTTP / HTTPS / SOCKS proxy.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * reactive:
+     *   http:
+     *     network:
+     *       proxy:
+     *         type: HTTP
+     *         host: proxy.example.com
+     *         port: 8080
+     *         username: ${PROXY_USER}
+     *         password: ${PROXY_PASS}
+     *         non-proxy-hosts: "localhost|*.internal"
+     * }</pre>
+     */
+    public static class ProxyConfig {
+
+        public enum Type { HTTP, HTTPS, SOCKS4, SOCKS5, NONE }
+
+        /** Proxy protocol; set to {@link Type#NONE} to explicitly disable inherited global proxy. */
+        private Type type = Type.HTTP;
+        private String host;
+        private int port;
+        private String username;
+        private String password;
+        /**
+         * Reactor Netty {@code nonProxyHosts} pattern. Java {@link java.util.regex.Pattern}
+         * syntax — pipe-separated alternatives. Use {@code .*\.internal} (a real
+         * regex), not {@code *.internal} (a glob). {@code null} = always go via the
+         * proxy.
+         */
+        private String nonProxyHosts;
+
+        public Type getType() { return type; }
+        public void setType(Type type) { this.type = type; }
+
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+
+        public String getNonProxyHosts() { return nonProxyHosts; }
+        public void setNonProxyHosts(String nonProxyHosts) { this.nonProxyHosts = nonProxyHosts; }
+    }
+
+    // ---- TLS / mTLS configuration ----
+
+    /**
+     * Custom SSL / mTLS configuration. Truststore and keystore paths are resolved
+     * via Spring's {@link org.springframework.core.io.DefaultResourceLoader} so
+     * {@code classpath:}, {@code file:} and absolute paths all work.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * reactive:
+     *   http:
+     *     network:
+     *       tls:
+     *         trust-store: classpath:certs/truststore.p12
+     *         trust-store-password: changeit
+     *         trust-store-type: PKCS12
+     *         key-store: classpath:certs/client.p12
+     *         key-store-password: changeit
+     *         key-store-type: PKCS12
+     *         protocols: [TLSv1.3, TLSv1.2]
+     *         ciphers: []
+     *         insecure-trust-all: false
+     * }</pre>
+     *
+     * <p>Setting {@code insecure-trust-all: true} disables certificate verification
+     * — only acceptable in development environments. The starter logs a WARN when
+     * this is enabled.
+     */
+    public static class TlsConfig {
+        private String trustStore;
+        private String trustStorePassword;
+        private String trustStoreType = "PKCS12";
+
+        private String keyStore;
+        private String keyStorePassword;
+        private String keyStoreType = "PKCS12";
+
+        private java.util.List<String> protocols = java.util.List.of();
+        private java.util.List<String> ciphers = java.util.List.of();
+        /** {@code true} disables certificate validation — never use in production. */
+        private boolean insecureTrustAll = false;
+
+        public String getTrustStore() { return trustStore; }
+        public void setTrustStore(String trustStore) { this.trustStore = trustStore; }
+        public String getTrustStorePassword() { return trustStorePassword; }
+        public void setTrustStorePassword(String trustStorePassword) { this.trustStorePassword = trustStorePassword; }
+        public String getTrustStoreType() { return trustStoreType; }
+        public void setTrustStoreType(String trustStoreType) { this.trustStoreType = trustStoreType; }
+
+        public String getKeyStore() { return keyStore; }
+        public void setKeyStore(String keyStore) { this.keyStore = keyStore; }
+        public String getKeyStorePassword() { return keyStorePassword; }
+        public void setKeyStorePassword(String keyStorePassword) { this.keyStorePassword = keyStorePassword; }
+        public String getKeyStoreType() { return keyStoreType; }
+        public void setKeyStoreType(String keyStoreType) { this.keyStoreType = keyStoreType; }
+
+        public java.util.List<String> getProtocols() { return protocols; }
+        public void setProtocols(java.util.List<String> protocols) {
+            this.protocols = protocols == null ? java.util.List.of() : java.util.List.copyOf(protocols);
+        }
+        public java.util.List<String> getCiphers() { return ciphers; }
+        public void setCiphers(java.util.List<String> ciphers) {
+            this.ciphers = ciphers == null ? java.util.List.of() : java.util.List.copyOf(ciphers);
+        }
+
+        public boolean isInsecureTrustAll() { return insecureTrustAll; }
+        public void setInsecureTrustAll(boolean insecureTrustAll) { this.insecureTrustAll = insecureTrustAll; }
+    }
+
     // ---- per-client configuration ----
 
     public static class ClientConfig {
@@ -210,6 +345,18 @@ public class ReactiveHttpClientProperties {
          * instance takes precedence — there is no field-level merging.
          */
         private ConnectionPoolConfig pool;
+        /**
+         * Per-client HTTP proxy override. When {@code null}, the client inherits
+         * {@link NetworkConfig#getProxy()}. Set to disable a global proxy for one
+         * client, supply {@code type: NONE} or override host/port to {@code null}.
+         */
+        private ProxyConfig proxy;
+        /**
+         * Per-client TLS override. When {@code null}, the client inherits
+         * {@link NetworkConfig#getTls()}. When set, every field on this instance
+         * takes precedence over the global block (no field-level merging).
+         */
+        private TlsConfig tls;
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
@@ -247,6 +394,12 @@ public class ReactiveHttpClientProperties {
 
         public ConnectionPoolConfig getPool() { return pool; }
         public void setPool(ConnectionPoolConfig pool) { this.pool = pool; }
+
+        public ProxyConfig getProxy() { return proxy; }
+        public void setProxy(ProxyConfig proxy) { this.proxy = proxy; }
+
+        public TlsConfig getTls() { return tls; }
+        public void setTls(TlsConfig tls) { this.tls = tls; }
     }
 
     // ---- resilience sub-config ----
@@ -420,12 +573,21 @@ public class ReactiveHttpClientProperties {
     /**
      * Settings for {@link io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter}.
      *
+     * <p>The MDC fallback list controls which logging-MDC keys the outbound exchange
+     * filter consults when no correlation id is present in the Reactor context — useful
+     * for non-reactive integrations (Brave, Sleuth) and tracing libraries that publish
+     * their own keys (e.g. Zipkin's {@code X-B3-TraceId}, Jaeger's
+     * {@code uber-trace-id}). Keys are tried in the configured order; the first
+     * non-blank value wins. Defaults preserve the previously hard-coded list:
+     * {@code ["correlationId", "X-Correlation-Id", "traceId"]}.
+     *
      * <p>Example {@code application.yml}:
      * <pre>{@code
      * reactive:
      *   http:
      *     correlation-id:
      *       max-length: 128
+     *       mdc-keys: [correlationId, X-Correlation-Id, traceId, X-B3-TraceId]
      * }</pre>
      */
     public static class CorrelationIdConfig {
@@ -433,8 +595,34 @@ public class ReactiveHttpClientProperties {
         /** Upper bound on the accepted correlation-id value length. Values longer than this are rejected. */
         private int maxLength = 128;
 
+        /**
+         * Ordered list of MDC keys consulted by the outbound exchange filter when no
+         * correlation id is present in the Reactor context. The first key with a
+         * non-blank value wins.
+         */
+        private java.util.List<String> mdcKeys = defaultMdcKeys();
+
         public int getMaxLength() { return maxLength; }
         public void setMaxLength(int maxLength) { this.maxLength = maxLength; }
+
+        public java.util.List<String> getMdcKeys() { return mdcKeys; }
+        public void setMdcKeys(java.util.List<String> mdcKeys) {
+            if (mdcKeys == null || mdcKeys.isEmpty()) {
+                this.mdcKeys = java.util.List.of();
+                return;
+            }
+            java.util.List<String> normalized = new java.util.ArrayList<>(mdcKeys.size());
+            for (String key : mdcKeys) {
+                if (key == null) continue;
+                String trimmed = key.trim();
+                if (!trimmed.isEmpty()) normalized.add(trimmed);
+            }
+            this.mdcKeys = java.util.List.copyOf(normalized);
+        }
+
+        private static java.util.List<String> defaultMdcKeys() {
+            return java.util.List.of("correlationId", "X-Correlation-Id", "traceId");
+        }
     }
 
     // ---- inbound-headers filter config ----

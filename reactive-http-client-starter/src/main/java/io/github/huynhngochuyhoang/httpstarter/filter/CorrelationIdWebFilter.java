@@ -12,6 +12,8 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * {@link WebFilter} that captures the inbound {@code X-Correlation-Id} header
  * and stores it in the Reactor {@link reactor.util.context.Context} so it can be
@@ -39,11 +41,6 @@ public class CorrelationIdWebFilter implements WebFilter {
 
     /** HTTP header name for the correlation ID. */
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
-    private static final String[] MDC_FALLBACK_KEYS = {
-            CORRELATION_ID_CONTEXT_KEY,
-            CORRELATION_ID_HEADER,
-            "traceId"
-    };
 
     private final int maxLength;
 
@@ -91,10 +88,11 @@ public class CorrelationIdWebFilter implements WebFilter {
         ReactiveHttpClientProperties.CorrelationIdConfig resolved =
                 config != null ? config : new ReactiveHttpClientProperties.CorrelationIdConfig();
         int maxLen = resolved.getMaxLength();
+        List<String> mdcKeys = List.copyOf(resolved.getMdcKeys());
         return (request, next) -> Mono.deferContextual(ctx -> {
             String correlationId = ctx.getOrDefault(CORRELATION_ID_CONTEXT_KEY, null);
             if (correlationId == null) {
-                correlationId = resolveFromMdc();
+                correlationId = resolveFromMdc(mdcKeys);
             }
             String validated = isValid(correlationId, maxLen) ? correlationId : null;
             if (StringUtils.hasText(validated)) {
@@ -127,8 +125,11 @@ public class CorrelationIdWebFilter implements WebFilter {
         return value;
     }
 
-    private static String resolveFromMdc() {
-        for (String key : MDC_FALLBACK_KEYS) {
+    private static String resolveFromMdc(List<String> keys) {
+        if (keys == null || keys.isEmpty()) {
+            return null;
+        }
+        for (String key : keys) {
             String value;
             try {
                 value = MDC.get(key);

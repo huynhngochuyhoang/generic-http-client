@@ -23,8 +23,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.http.client.HttpClient;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -93,6 +96,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         ResilienceOperatorApplier resilienceOperatorApplier = resolveResilienceOperatorApplier(
                 circuitBreakerRegistry, retryRegistry, bulkheadRegistry);
         ObjectMapper objectMapper = applicationContext.getBeanProvider(ObjectMapper.class).getIfAvailable();
+
+        validatePerMethodResilienceInstances(type, metadataCache, resilienceOperatorApplier, clientName);
 
         ReactiveClientInvocationHandler handler = new ReactiveClientInvocationHandler(
                 webClient,
@@ -184,6 +189,17 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                             resolvedNetworkConfig.getNetworkWriteTimeoutMs(), TimeUnit.MILLISECONDS));
                 })
                 .compress(config.isCompressionEnabled());
+
+        ReactiveHttpClientProperties.ProxyConfig proxy = resolveProxy(config, resolvedNetworkConfig);
+        if (proxy != null && proxy.getType() != ReactiveHttpClientProperties.ProxyConfig.Type.NONE
+                && StringUtils.hasText(proxy.getHost())) {
+            httpClient = HttpProxyApplier.apply(httpClient, proxy);
+        }
+
+        ReactiveHttpClientProperties.TlsConfig tls = resolveTls(config, resolvedNetworkConfig);
+        if (tls != null) {
+            httpClient = TlsContextApplier.apply(httpClient, tls, clientName);
+        }
         WebClient.Builder builder = applicationContext
                 .getBeanProvider(WebClient.Builder.class)
                 .getIfAvailable(WebClient::builder);
@@ -214,6 +230,22 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         return networkConfig.getConnectionPool() != null
                 ? networkConfig.getConnectionPool()
                 : new ReactiveHttpClientProperties.ConnectionPoolConfig();
+    }
+
+    /** Per-client proxy override wins; otherwise the global proxy applies. {@code null} = direct connection. */
+    static ReactiveHttpClientProperties.ProxyConfig resolveProxy(
+            ReactiveHttpClientProperties.ClientConfig config,
+            ReactiveHttpClientProperties.NetworkConfig networkConfig) {
+        if (config != null && config.getProxy() != null) return config.getProxy();
+        return networkConfig != null ? networkConfig.getProxy() : null;
+    }
+
+    /** Per-client TLS override wins; otherwise the global TLS applies. {@code null} = JDK defaults. */
+    static ReactiveHttpClientProperties.TlsConfig resolveTls(
+            ReactiveHttpClientProperties.ClientConfig config,
+            ReactiveHttpClientProperties.NetworkConfig networkConfig) {
+        if (config != null && config.getTls() != null) return config.getTls();
+        return networkConfig != null ? networkConfig.getTls() : null;
     }
 
     private int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
@@ -279,6 +311,56 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             log.warn("Resilience4j operator applier could not be initialized. Falling back to no-op resilience.",
                     error);
             return new NoopResilienceOperatorApplier();
+        }
+    }
+
+    /**
+     * Eagerly parses every method on {@code clientInterface}, then verifies that
+     * any per-method {@code @Retry} / {@code @CircuitBreaker} / {@code @Bulkhead}
+     * instance name has a corresponding entry in the matching Resilience4j
+     * registry. Fails fast at proxy construction time so a typo doesn't silently
+     * fall back to default-configured behaviour.
+     */
+    private void validatePerMethodResilienceInstances(Class<?> clientInterface,
+                                                      MethodMetadataCache metadataCache,
+                                                      ResilienceOperatorApplier applier,
+                                                      String clientName) {
+        List<String> missing = new ArrayList<>();
+        for (Method method : clientInterface.getDeclaredMethods()) {
+            if (method.isSynthetic() || method.isDefault() || method.isBridge()) continue;
+            MethodMetadata meta;
+            try {
+                meta = metadataCache.get(method);
+            } catch (RuntimeException e) {
+                // Methods that fail to parse (e.g. helper methods without HTTP verb)
+                // are validated only when invoked; skip them here.
+                continue;
+            }
+            checkInstance(applier, ResilienceOperatorApplier.InstanceType.RETRY,
+                    meta.getRetryInstanceName(), method, "@Retry", missing);
+            checkInstance(applier, ResilienceOperatorApplier.InstanceType.CIRCUIT_BREAKER,
+                    meta.getCircuitBreakerInstanceName(), method, "@CircuitBreaker", missing);
+            checkInstance(applier, ResilienceOperatorApplier.InstanceType.BULKHEAD,
+                    meta.getBulkheadInstanceName(), method, "@Bulkhead", missing);
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException(
+                    "Reactive HTTP client '" + clientName + "' references undefined Resilience4j instances:\n  - "
+                            + String.join("\n  - ", missing)
+                            + "\nDefine them under resilience4j.<retry|circuitbreaker|bulkhead>.instances.* in application config.");
+        }
+    }
+
+    private static void checkInstance(ResilienceOperatorApplier applier,
+                                      ResilienceOperatorApplier.InstanceType type,
+                                      String instanceName,
+                                      Method method,
+                                      String annotationName,
+                                      List<String> missing) {
+        if (instanceName == null || instanceName.isBlank()) return;
+        if (!applier.isInstanceConfigured(type, instanceName)) {
+            missing.add(annotationName + "(\"" + instanceName + "\") on "
+                    + method.getDeclaringClass().getSimpleName() + "#" + method.getName());
         }
     }
 
