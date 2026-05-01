@@ -274,39 +274,119 @@
 
 ## Priority 6 — Larger API-surface changes (1.9.x / 2.0.0)
 
-### [ ] 1.1 OpenTelemetry-native observer
-- [ ] New optional module `reactive-http-client-otel`.
-- [ ] `OpenTelemetryHttpClientObserver` mirroring `MicrometerHttpClientObserver`.
-- [ ] Semantic conventions: `http.request.method`, `http.response.status_code`,
+### [x] 1.1 OpenTelemetry-native observer
+- [x] New optional module `reactive-http-client-otel`.
+  _Registered under the parent pom's `<modules>`. Pulls
+  `opentelemetry-api` (compile) and uses Spring Boot's managed OTel BOM. Test
+  scope brings `opentelemetry-sdk-testing` for the `InMemorySpanExporter`._
+- [x] `OpenTelemetryHttpClientObserver` mirroring `MicrometerHttpClientObserver`.
+  _Implements `HttpClientObserver`. Builds a `CLIENT` span per invocation with
+  explicit start/end timestamps derived from `event.durationMs`._
+- [x] Semantic conventions: `http.request.method`, `http.response.status_code`,
   `server.address`, `error.type` (from `ErrorCategory`).
+  _Standard attributes set: `http.request.method`, `http.response.status_code`,
+  `url.template`, `error.type`. `server.address` is **not** set because the
+  starter's `HttpClientObserverEvent` carries the path template, not the host;
+  noted as a future enhancement when we thread the resolved URL through the
+  observer event. `error.type` falls back to the exception's simple class
+  name when `ErrorCategory` is null (e.g. raw network errors). Starter-specific
+  attributes (`rhttp.client.name`, `rhttp.api.name`, `rhttp.attempt.count`,
+  `rhttp.request.bytes`, `rhttp.response.bytes`) are also recorded._
 - [ ] Baggage propagation through the Reactor `Context`.
-- [ ] Auto-configure under `@ConditionalOnClass(io.opentelemetry.api.OpenTelemetry.class)`.
-- [ ] Integration test with the OTel SDK in-memory exporter.
+  **Deferred.** OTel `Baggage` propagation requires hooking the OTel context
+  through Reactor's context-propagation hook (separate from the observer
+  callback). Best done in a follow-up that wires the existing
+  `CorrelationIdWebFilter` into OTel baggage natively, rather than as a
+  one-off in this module.
+- [x] Auto-configure under `@ConditionalOnClass(io.opentelemetry.api.OpenTelemetry.class)`.
+  _Plus `@ConditionalOnBean(OpenTelemetry.class)` and
+  `@ConditionalOnProperty(reactive.http.observability.otel.enabled, default true)`.
+  Registered via `META-INF/spring/.../AutoConfiguration.imports`. Gated on
+  `@ConditionalOnMissingBean(HttpClientObserver.class)` so it shuts off the
+  Micrometer observer when both starter modules are on the classpath._
+- [x] Integration test with the OTel SDK in-memory exporter.
+  _`OpenTelemetryHttpClientObserverTest` (6 cases) covers success span shape,
+  error → `StatusCode.ERROR` + recorded exception event, network failure
+  before response → no `http.response.status_code` + exception class name as
+  `error.type`, unknown body sizes omitted, low-cardinality fallbacks for
+  null method/api names, and span duration matching `event.durationMs`._
 
-### [ ] 1.9 Per-method `@Retry`, `@CircuitBreaker`, `@Bulkhead`
-- [ ] New annotations, parsed in `MethodMetadataCache`.
-- [ ] `Resilience4jOperatorApplier` picks per-method instance names when present,
+### [x] 1.9 Per-method `@Retry`, `@CircuitBreaker`, `@Bulkhead`
+- [x] New annotations, parsed in `MethodMetadataCache`.
+  _Three new method-level annotations carrying the Resilience4j instance
+  name. Parser stores them on `MethodMetadata` and rejects blank values._
+- [x] `Resilience4jOperatorApplier` picks per-method instance names when present,
   falling back to the client-level config.
-- [ ] Fail-fast validation when a referenced instance name is missing at startup.
-- [ ] Tests: method-level override wins, missing instance fails fast, coexistence with
+  _New `resolveResilienceInstanceName(methodLevel, clientLevel)` helper in
+  the handler — per-method wins; falls back to `resilience.retry`,
+  `.circuit-breaker`, `.bulkhead` when not set. Only effective when the
+  client has `resilience.enabled = true`._
+- [x] Fail-fast validation when a referenced instance name is missing at startup.
+  _New `ResilienceOperatorApplier.isInstanceConfigured(InstanceType, String)`
+  hook with default-true (Noop) and a Resilience4j-backed implementation
+  using each registry's `find(name)`. The factory bean walks all annotated
+  methods at proxy construction time and throws an `IllegalStateException`
+  listing every missing instance, so a typo doesn't silently fall back to
+  default-configured behaviour._
+- [x] Tests: method-level override wins, missing instance fails fast, coexistence with
   the existing client-level config.
+  _`PerMethodResilienceTest` (9 cases): annotation parsing, override
+  precedence, blank-value rejection, registry-driven configured/missing
+  reporting (both Noop and Resilience4j applier), and the factory bean's
+  fail-fast path with a real Spring context + `RetryRegistry`._
 
-### [ ] 1.5 HTTP proxy + custom SSL / mTLS support
-- [ ] `NetworkConfig.ProxyConfig` (host, port, type, optional auth).
-- [ ] `ClientConfig.TlsConfig` (truststore, keystore, protocols, cipher allow-list).
-- [ ] Apply in `buildWebClient` via `HttpClient.proxy(...)` and `HttpClient.secure(...)`.
+### [x] 1.5 HTTP proxy + custom SSL / mTLS support
+- [x] `NetworkConfig.ProxyConfig` (host, port, type, optional auth).
+  _Plus a `Type` enum (HTTP / HTTPS / SOCKS4 / SOCKS5 / NONE — last one
+  explicitly disables an inherited global proxy for one client) and
+  `nonProxyHosts` (Java regex). Per-client override wins over the global
+  block._
+- [x] `ClientConfig.TlsConfig` (truststore, keystore, protocols, cipher allow-list).
+  _Resources resolved via Spring's `DefaultResourceLoader`
+  (`classpath:` / `file:` / absolute paths). Adds an
+  `insecure-trust-all` flag for dev that emits a WARN log on use._
+- [x] Apply in `buildWebClient` via `HttpClient.proxy(...)` and `HttpClient.secure(...)`.
+  _Extracted as `HttpProxyApplier` and `TlsContextApplier` for unit testability._
 - [ ] Integration test with a local self-signed peer.
+  _Deferred. Scoped to unit-level tests that exercise the resolution rules,
+  the proxy applier (verifying `HttpClient.configuration().hasProxy()`),
+  and TLS context construction with both insecure-trust-all and a
+  generated empty PKCS12 truststore. End-to-end mTLS handshake with a
+  self-signed peer is heavy and adds little signal beyond what
+  `SslContextBuilder` already gives us._
 
-### [ ] 1.8 Response streaming passthrough
-- [ ] Detect `Flux<DataBuffer>` / `Mono<ResponseEntity<Flux<DataBuffer>>>` return types.
-- [ ] Skip the in-memory codec in those cases.
-- [ ] Make sure observability still records duration / size correctly.
-- [ ] Test with a large (>codec-max) response.
+### [x] 1.8 Response streaming passthrough
+- [x] Detect `Flux<DataBuffer>` / `Mono<ResponseEntity<Flux<DataBuffer>>>` return types.
+  _Detection lives in `buildFlux` / `buildMono`. The `ResponseEntity`
+  variant is detected via reflective type-walk
+  (`isResponseEntityOfFluxDataBuffer`)._
+- [x] Skip the in-memory codec in those cases.
+  _For `Flux<DataBuffer>` we use `bodyToFlux(DataBuffer.class)` (identity
+  decoder, not subject to `codec-max-in-memory-size`). For
+  `Mono<ResponseEntity<Flux<DataBuffer>>>` we wrap the streaming
+  `Flux<DataBuffer>` body inside a `ResponseEntity` carrying upstream
+  status + headers — the body is a lazy `Flux` that the caller drives._
+- [x] Make sure observability still records duration / size correctly.
+  _The streaming `Flux` is reported via the existing `reportExchange`
+  pipeline at terminal/cancel signals; `Content-Length` is captured
+  pre-decoding for response-size metrics. Verified by the existing
+  observability tests still passing._
+- [x] Test with a large (>codec-max) response.
+  _`StreamingResponseTest` configures a 1 MiB codec limit and serves a
+  2 MiB response across both patterns; asserts the full byte count is
+  delivered without a `DataBufferLimitException`._
 
-### [ ] 1.10 Configurable correlation-ID and inbound-header filters
-- [ ] `reactive.http.correlation-id.mdc-keys: list` consumed by `CorrelationIdWebFilter`.
-- [ ] `reactive.http.inbound-headers.allow-list` / `deny-list` consumed by
+### [x] 1.10 Configurable correlation-ID and inbound-header filters
+- [x] `reactive.http.correlation-id.mdc-keys: list` consumed by `CorrelationIdWebFilter`.
+  _Replaces the previously hard-coded
+  `["correlationId", "X-Correlation-Id", "traceId"]`. The list is normalised
+  (trimmed, blanks dropped) and threaded through the static
+  `exchangeFilter(CorrelationIdConfig)` factory so the propagation path
+  honours the configured order. Empty list disables the MDC fallback._
+- [x] `reactive.http.inbound-headers.allow-list` / `deny-list` consumed by
   `InboundHeadersWebFilter` (overlaps with 3.7 — implement once).
+  _Already shipped in 1.9.0 as part of 3.7 (security fix); listed here for
+  cross-reference._
 
 ---
 

@@ -52,7 +52,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.9.0</version>
+  <version>1.10.0</version>
 </dependency>
 ```
 
@@ -97,6 +97,9 @@ public interface UserApiClient {
 ```yaml
 reactive:
   http:
+    correlation-id:
+      max-length: 128
+      mdc-keys: [correlationId, X-Correlation-Id, traceId]   # MDC fallback order; empty list disables fallback
     network:
       connect-timeout-ms: 2000
       network-read-timeout-ms: 60000    # Netty ReadTimeoutHandler safety net
@@ -107,6 +110,17 @@ reactive:
         max-idle-time-ms: 30000         # evict idle connections after 30 s (0 = off)
         max-life-time-ms: 300000        # recycle pooled connections after 5 min (0 = unlimited)
         evict-in-background-ms: 60000   # background eviction sweep interval (0 = off)
+      proxy:                             # optional outbound HTTP proxy
+        type: HTTP                       # HTTP | HTTPS | SOCKS4 | SOCKS5 | NONE
+        host: proxy.corp.example
+        port: 3128
+        # username, password, non-proxy-hosts (regex) optional
+      tls:                               # optional custom SSL / mTLS
+        trust-store: classpath:certs/truststore.p12
+        trust-store-password: changeit
+        key-store: classpath:certs/client.p12
+        key-store-password: changeit
+        # protocols, ciphers, insecure-trust-all optional
     clients:
       user-service:
         base-url: https://api.example.com
@@ -116,6 +130,11 @@ reactive:
         log-exchange: false
         pool:                            # optional per-client pool override
           max-connections: 500           # inherits the global pool when omitted
+        proxy:                           # optional per-client proxy override (or `type: NONE` to bypass global)
+          type: NONE
+        tls:                             # optional per-client TLS override
+          trust-store: classpath:certs/partner-ts.p12
+          trust-store-password: ${PARTNER_TS_PWD}
         resilience:
           enabled: true
           circuit-breaker: user-service
@@ -262,6 +281,71 @@ the convenience record `io.github.huynhngochuyhoang.httpstarter.core.FileAttachm
 Combining `@MultipartBody` with `@Body` on the same method is rejected at
 metadata-parse time — pick one.
 
+### 2.5.3 HTTP proxy & TLS / mTLS
+
+Both routing through an outbound proxy and presenting a client certificate
+for mTLS are configured under `reactive.http.network.proxy.*` and
+`reactive.http.network.tls.*` (global) — and can be overridden per client
+under `reactive.http.clients.<name>.proxy.*` / `.tls.*`. When a per-client
+override is present, the entire block replaces the global one (no
+field-level merging).
+
+Proxy types: `HTTP`, `HTTPS`, `SOCKS4`, `SOCKS5`, plus `NONE` to explicitly
+disable an inherited global proxy on a single client.
+
+```yaml
+reactive:
+  http:
+    network:
+      proxy:
+        type: HTTP
+        host: proxy.corp.example
+        port: 3128
+        username: ${PROXY_USER}
+        password: ${PROXY_PASS}
+        non-proxy-hosts: "localhost|.*\\.internal"   # Java regex (not glob)
+      tls:
+        trust-store: classpath:certs/truststore.p12
+        trust-store-password: changeit
+        key-store: classpath:certs/client.p12        # client cert for mTLS
+        key-store-password: changeit
+        protocols: [TLSv1.3, TLSv1.2]
+        # ciphers: [...]
+        # insecure-trust-all: true        # development only — emits a startup WARN
+```
+
+Truststore / keystore paths are resolved through Spring's
+`DefaultResourceLoader`, so `classpath:`, `file:`, and absolute filesystem
+paths all work. Setting `insecure-trust-all: true` disables certificate
+validation; the starter logs a WARN at startup so it's never an accident.
+`non-proxy-hosts` is a Java regex pattern (not a glob), pipe-separated for
+alternatives — use `.*\.internal`, not `*.internal`.
+
+### 2.5.4 Streaming responses
+
+Methods declaring `Flux<DataBuffer>` or `Mono<ResponseEntity<Flux<DataBuffer>>>`
+skip the in-memory codec entirely, so payloads larger than
+`codec-max-in-memory-size-mb` are streamed without a `DataBufferLimitException`.
+The `ResponseEntity` variant exposes the upstream status and headers
+alongside the streaming body — useful for proxy / pass-through
+implementations:
+
+```java
+@ReactiveHttpClient(name = "object-store")
+public interface ObjectStoreClient {
+
+    @GET("/objects/{key}")
+    Flux<DataBuffer> download(@PathVar("key") String key);
+
+    @GET("/objects/{key}")
+    Mono<ResponseEntity<Flux<DataBuffer>>> downloadEntity(@PathVar("key") String key);
+}
+```
+
+Buffers are released by Reactor Netty as the consumer drives the `Flux`,
+so memory usage stays bounded regardless of payload size. Standard
+observability (duration, response size from `Content-Length`) still applies.
+
 ### 2.6 Inject and use
 
 ```java
@@ -311,6 +395,9 @@ Each proxy invocation follows this pipeline:
 | `@FormFile(name, filename, contentType)` | Parameter | File part of a `@MultipartBody` request — accepts `byte[]`, `Resource`, or `FileAttachment` |
 | `@ApiName("...")` | Method | Logical API name for metrics/tracing |
 | `@TimeoutMs(ms)` | Method | Method-level timeout override (`0` disables timeout for that method) |
+| `@Retry("instance")` | Method | Per-method Resilience4j Retry instance — overrides `resilience.retry` |
+| `@CircuitBreaker("instance")` | Method | Per-method Resilience4j CircuitBreaker instance — overrides `resilience.circuit-breaker` |
+| `@Bulkhead("instance")` | Method | Per-method Resilience4j Bulkhead instance — overrides `resilience.bulkhead` |
 | `@LogHttpExchange` | Method | Request/response log hook via `HttpExchangeLogger` |
 
 ---
@@ -351,7 +438,29 @@ reactive:
           retry-methods: [GET, HEAD, PUT]
 ```
 
-If you need per-business-method policies or fallback methods, add Resilience4j annotations at the service layer.
+### Per-method overrides
+
+One client typically fronts several endpoints with different sensitivity to retry / circuit-breaker / bulkhead policy — e.g. a hot read path vs. an expensive write. The `@Retry` / `@CircuitBreaker` / `@Bulkhead` annotations let a single method opt into a different Resilience4j instance:
+
+```java
+@ReactiveHttpClient(name = "user-service")
+public interface UserApi {
+
+    @GET("/users/{id}")
+    @Retry("user-read-retry")              // 5 attempts, 100ms backoff
+    @CircuitBreaker("user-read-cb")        // wide open, 50% failure threshold
+    Mono<User> getUser(@PathVar("id") long id);
+
+    @POST("/users")
+    @Bulkhead("user-write-bulkhead")       // limit concurrent writes
+    Mono<User> createUser(@Body NewUser body);
+}
+```
+
+Per-method instance names take precedence over the client-level
+`resilience.retry` / `.circuit-breaker` / `.bulkhead` settings. An instance referenced by an annotation **must** be configured (e.g. under `resilience4j.retry.instances.user-read-retry` in `application.yml`); the starter walks every annotated method at proxy-construction time and fails fast with a descriptive `IllegalStateException` listing every missing instance, so a typo can't silently fall back to a default-configured instance.
+
+Per-method annotations are still gated on the client having `resilience.enabled = true`. Methods without an override inherit the client-level config, exactly as before.
 
 ### Common dependencies in consumer apps
 
@@ -438,6 +547,47 @@ Sample actuator payload:
 
 To override, register your own bean named `reactiveHttpClientHealthIndicator`.
 
+### OpenTelemetry tracing (`reactive-http-client-otel`)
+
+The optional `reactive-http-client-otel` companion artifact records each
+outbound exchange as an OpenTelemetry span using the standard
+[HTTP client semantic conventions](https://opentelemetry.io/docs/specs/semconv/http/http-spans/):
+
+```xml
+<dependency>
+  <groupId>io.github.huynhngochuyhoang</groupId>
+  <artifactId>reactive-http-client-otel</artifactId>
+  <version>${reactive-http-client.version}</version>
+</dependency>
+```
+
+Activation: when `opentelemetry-api` is on the classpath **and** an
+`OpenTelemetry` bean is available in the context, the auto-configuration
+registers `OpenTelemetryHttpClientObserver` under the property
+`reactive.http.observability.otel.enabled` (default `true`). Set to `false`
+to disable without removing the dependency.
+
+| Span field | Source |
+|---|---|
+| Span name (low-cardinality) | `<METHOD> <api.name>` — e.g. `GET getUserById` |
+| Span kind | `CLIENT` |
+| `http.request.method` | event HTTP verb |
+| `http.response.status_code` | event status code (omitted on network failure before response) |
+| `url.template` | path template, e.g. `/users/{id}` |
+| `error.type` | `ErrorCategory` name; falls back to the exception's simple class name when category is unset |
+| `rhttp.client.name` / `rhttp.api.name` | starter-specific |
+| `rhttp.attempt.count` | starter-specific (>1 = retried) |
+| `rhttp.request.bytes` / `rhttp.response.bytes` | starter-specific (only set when measurable) |
+
+Errors set `StatusCode.ERROR` and call `recordException(...)` so the
+exception event lands in the span.
+
+> ⚠️ The OTel observer registers as the only `HttpClientObserver` under
+> `@ConditionalOnMissingBean(HttpClientObserver.class)` — pulling in the OTel
+> module **disables the Micrometer observer** (and vice versa). To run both,
+> register a custom `HttpClientObserver` bean that delegates to both
+> implementations.
+
 ### Resilience4j metrics
 
 When both `micrometer-core` and `io.github.resilience4j:resilience4j-micrometer` are on the classpath **and** the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, `BulkheadRegistry` as beans, the starter auto-binds Resilience4j's tagged metrics to the shared `MeterRegistry`:
@@ -493,12 +643,17 @@ reactive-http-client/
 │       ├── exception/
 │       ├── filter/
 │       └── observability/
-└── reactive-http-client-test/
+├── reactive-http-client-test/
+│   ├── pom.xml
+│   └── src/main/java/io/github/huynhngochuyhoang/httpstarter/test/
+│       ├── ErrorCategoryAssertions.java
+│       ├── MockReactiveHttpClient.java
+│       └── RecordedExchange.java
+└── reactive-http-client-otel/
     ├── pom.xml
-    └── src/main/java/io/github/huynhngochuyhoang/httpstarter/test/
-        ├── ErrorCategoryAssertions.java
-        ├── MockReactiveHttpClient.java
-        └── RecordedExchange.java
+    └── src/main/java/io/github/huynhngochuyhoang/httpstarter/otel/
+        ├── OpenTelemetryHttpClientAutoConfiguration.java
+        └── OpenTelemetryHttpClientObserver.java
 ```
 
 ---

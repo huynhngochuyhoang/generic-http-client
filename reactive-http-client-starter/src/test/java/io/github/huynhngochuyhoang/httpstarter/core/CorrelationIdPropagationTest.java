@@ -158,6 +158,83 @@ class CorrelationIdPropagationTest {
     }
 
     @Test
+    void shouldHonourConfiguredMdcKeysListInstead() {
+        AtomicReference<String> capturedHeader = new AtomicReference<>();
+
+        // Configure a custom key list that does NOT include the legacy "traceId" key
+        ReactiveHttpClientProperties.CorrelationIdConfig config =
+                new ReactiveHttpClientProperties.CorrelationIdConfig();
+        config.setMdcKeys(java.util.List.of("X-B3-TraceId", "uber-trace-id"));
+
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .filter(CorrelationIdWebFilter.exchangeFilter(config))
+                .exchangeFunction(request -> {
+                    capturedHeader.set(request.headers().getFirst(CorrelationIdWebFilter.CORRELATION_ID_HEADER));
+                    ClientResponse ok = ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                            .body("ok")
+                            .build();
+                    return Mono.just(ok);
+                })
+                .build();
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient);
+
+        // Place value under a key that is NOT in the configured list — must be ignored.
+        org.slf4j.MDC.put("traceId", "ignored");
+        // Place value under a key that IS in the configured list — must win.
+        org.slf4j.MDC.put("X-B3-TraceId", "b3-value");
+        try {
+            StepVerifier.create(invokeGetUsers(handler))
+                    .expectNextMatches(body -> "ok".equals(body))
+                    .verifyComplete();
+
+            assertEquals("b3-value", capturedHeader.get(),
+                    "configured mdc-keys must win over the legacy hard-coded list");
+        } finally {
+            org.slf4j.MDC.remove("traceId");
+            org.slf4j.MDC.remove("X-B3-TraceId");
+        }
+    }
+
+    @Test
+    void emptyMdcKeysListDisablesMdcFallback() {
+        AtomicReference<String> capturedHeader = new AtomicReference<>();
+
+        ReactiveHttpClientProperties.CorrelationIdConfig config =
+                new ReactiveHttpClientProperties.CorrelationIdConfig();
+        config.setMdcKeys(java.util.List.of());
+
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .filter(CorrelationIdWebFilter.exchangeFilter(config))
+                .exchangeFunction(request -> {
+                    capturedHeader.set(request.headers().getFirst(CorrelationIdWebFilter.CORRELATION_ID_HEADER));
+                    ClientResponse ok = ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                            .body("ok")
+                            .build();
+                    return Mono.just(ok);
+                })
+                .build();
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient);
+
+        org.slf4j.MDC.put("correlationId", "should-be-ignored");
+        try {
+            StepVerifier.create(invokeGetUsers(handler))
+                    .expectNextMatches(body -> "ok".equals(body))
+                    .verifyComplete();
+
+            assertNull(capturedHeader.get(),
+                    "empty mdc-keys list must disable the MDC fallback entirely");
+        } finally {
+            org.slf4j.MDC.remove("correlationId");
+        }
+    }
+
+    @Test
     void shouldNotDuplicateCorrelationIdWhenRequestAlreadyHasHeader() {
         AtomicReference<java.util.List<String>> capturedHeaders = new AtomicReference<>();
 

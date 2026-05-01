@@ -74,4 +74,15 @@ public class Resilience4jOperatorApplier implements ResilienceOperatorApplier {
         }
         return flux.transformDeferred(BulkheadOperator.of(bulkheadRegistry.bulkhead(instanceName)));
     }
+
+    @Override
+    public boolean isInstanceConfigured(InstanceType type, String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) return true;
+        return switch (type) {
+            case RETRY -> retryRegistry == null || retryRegistry.find(instanceName).isPresent();
+            case CIRCUIT_BREAKER ->
+                    circuitBreakerRegistry == null || circuitBreakerRegistry.find(instanceName).isPresent();
+            case BULKHEAD -> bulkheadRegistry == null || bulkheadRegistry.find(instanceName).isPresent();
+        };
+    }
 }

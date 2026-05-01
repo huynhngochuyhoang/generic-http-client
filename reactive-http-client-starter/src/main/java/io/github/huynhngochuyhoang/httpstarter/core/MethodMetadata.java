@@ -52,6 +52,11 @@ public class MethodMetadata {
     private boolean httpExchangeLoggingEnabled;
     private Class<? extends HttpExchangeLogger> httpExchangeLoggerClass;
 
+    /** Per-method Resilience4j instance overrides; {@code null} means "fall back to client-level config". */
+    private String retryInstanceName;
+    private String circuitBreakerInstanceName;
+    private String bulkheadInstanceName;
+
     // ---- getters / setters ----
 
     public String getHttpMethod() { return httpMethod; }
@@ -100,6 +105,19 @@ public class MethodMetadata {
     public Class<? extends HttpExchangeLogger> getHttpExchangeLoggerClass() { return httpExchangeLoggerClass; }
     public void setHttpExchangeLoggerClass(Class<? extends HttpExchangeLogger> httpExchangeLoggerClass) {
         this.httpExchangeLoggerClass = httpExchangeLoggerClass;
+    }
+
+    public String getRetryInstanceName() { return retryInstanceName; }
+    public void setRetryInstanceName(String retryInstanceName) { this.retryInstanceName = retryInstanceName; }
+
+    public String getCircuitBreakerInstanceName() { return circuitBreakerInstanceName; }
+    public void setCircuitBreakerInstanceName(String circuitBreakerInstanceName) {
+        this.circuitBreakerInstanceName = circuitBreakerInstanceName;
+    }
+
+    public String getBulkheadInstanceName() { return bulkheadInstanceName; }
+    public void setBulkheadInstanceName(String bulkheadInstanceName) {
+        this.bulkheadInstanceName = bulkheadInstanceName;
     }
 
     void freezeCollections() {

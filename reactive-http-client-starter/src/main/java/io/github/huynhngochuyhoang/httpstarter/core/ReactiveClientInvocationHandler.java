@@ -20,12 +20,14 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
@@ -330,6 +332,17 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (responseType == byte[].class) {
             return response.bodyToMono(byte[].class);
         }
+        if (responseType == DataBuffer.class) {
+            return response.bodyToMono(DataBuffer.class);
+        }
+        // Streaming passthrough for Mono<ResponseEntity<Flux<DataBuffer>>>: skip the
+        // in-memory codec entirely so large payloads aren't bound by codec-max-in-memory-size.
+        if (isResponseEntityOfFluxDataBuffer(responseType)) {
+            Flux<DataBuffer> streaming = response.bodyToFlux(DataBuffer.class);
+            return Mono.just(ResponseEntity.status(response.statusCode())
+                    .headers(response.headers().asHttpHeaders())
+                    .body(streaming));
+        }
         return response.bodyToMono(ParameterizedTypeReference.forType(responseType));
     }
 
@@ -337,7 +350,27 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (responseType == null) {
             return response.bodyToFlux(Object.class);
         }
+        if (responseType == DataBuffer.class) {
+            // Streaming passthrough: bodyToFlux(DataBuffer.class) wires the identity
+            // DataBufferDecoder, so the codec-max-in-memory-size limit does not apply
+            // — buffers are emitted as they arrive.
+            return response.bodyToFlux(DataBuffer.class);
+        }
         return response.bodyToFlux(ParameterizedTypeReference.forType(responseType));
+    }
+
+    /** {@code true} when {@code responseType} is exactly {@code ResponseEntity<Flux<DataBuffer>>}. */
+    private static boolean isResponseEntityOfFluxDataBuffer(Type responseType) {
+        if (!(responseType instanceof java.lang.reflect.ParameterizedType outer)) return false;
+        if (!(outer.getRawType() instanceof Class<?> outerRaw)) return false;
+        if (!ResponseEntity.class.equals(outerRaw)) return false;
+        Type[] outerArgs = outer.getActualTypeArguments();
+        if (outerArgs.length != 1) return false;
+        if (!(outerArgs[0] instanceof java.lang.reflect.ParameterizedType inner)) return false;
+        if (!(inner.getRawType() instanceof Class<?> innerRaw)) return false;
+        if (!Flux.class.equals(innerRaw)) return false;
+        Type[] innerArgs = inner.getActualTypeArguments();
+        return innerArgs.length == 1 && DataBuffer.class.equals(innerArgs[0]);
     }
 
     private Mono<?> applyResilienceMono(Mono<?> mono, MethodMetadata meta) {
@@ -345,10 +378,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (resilience == null || !resilience.isEnabled()) return mono;
 
         if (isRetryableMethod(meta.getHttpMethod())) {
-            mono = applyRetryMono(mono, resilience.getRetry());
+            mono = applyRetryMono(mono, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
-        mono = applyCircuitBreakerMono(mono, resilience.getCircuitBreaker());
-        mono = applyBulkheadMono(mono, resilience.getBulkhead());
+        mono = applyCircuitBreakerMono(mono, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
+        mono = applyBulkheadMono(mono, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
         return mono;
     }
 
@@ -357,11 +390,16 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (resilience == null || !resilience.isEnabled()) return flux;
 
         if (isRetryableMethod(meta.getHttpMethod())) {
-            flux = applyRetryFlux(flux, resilience.getRetry());
+            flux = applyRetryFlux(flux, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
-        flux = applyCircuitBreakerFlux(flux, resilience.getCircuitBreaker());
-        flux = applyBulkheadFlux(flux, resilience.getBulkhead());
+        flux = applyCircuitBreakerFlux(flux, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
+        flux = applyBulkheadFlux(flux, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
         return flux;
+    }
+
+    /** Per-method override wins; otherwise the client-level config applies. */
+    private static String resolveResilienceInstanceName(String methodLevel, String clientLevel) {
+        return (methodLevel != null && !methodLevel.isBlank()) ? methodLevel : clientLevel;
     }
 
     private long resolveTimeoutMs(MethodMetadata meta) {

@@ -10,39 +10,35 @@
         <version>1.10.0</version>
     </parent>
 
-    <artifactId>reactive-http-client-test</artifactId>
-    <name>reactive-http-client-test</name>
-    <description>Test helpers for the reactive-http-client-starter: proxy builders, exchange recorders, and assertion helpers for @ReactiveHttpClient interfaces.</description>
+    <artifactId>reactive-http-client-otel</artifactId>
+    <name>reactive-http-client-otel</name>
+    <description>OpenTelemetry observer + auto-configuration for reactive-http-client-starter. Records each outbound HTTP exchange as a span using OTel semantic conventions.</description>
 
     <dependencies>
+        <!-- Starter (compile) -->
         <dependency>
             <groupId>io.github.huynhngochuyhoang</groupId>
             <artifactId>reactive-http-client-starter</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- WebFlux (WebClient) -->
+        <!-- Spring Boot autoconfiguration -->
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-webflux</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
 
-        <!-- Reactor -->
+        <!-- OpenTelemetry API (compile) -->
         <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-core</artifactId>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
         </dependency>
 
-        <!-- spring-test for MockClientHttpRequest (compile scope: this module is test-helper code) -->
+        <!-- Configuration metadata processor -->
         <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-test</artifactId>
-        </dependency>
-
-        <!-- AssertJ – for ErrorCategoryAssertions -->
-        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
         </dependency>
 
         <!-- Test -->
@@ -52,8 +48,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-test</artifactId>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
