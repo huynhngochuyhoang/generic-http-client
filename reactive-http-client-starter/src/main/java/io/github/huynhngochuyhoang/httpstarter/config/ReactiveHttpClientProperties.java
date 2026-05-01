@@ -214,7 +214,7 @@ public class ReactiveHttpClientProperties {
      *         port: 8080
      *         username: ${PROXY_USER}
      *         password: ${PROXY_PASS}
-     *         non-proxy-hosts: "localhost|*.internal"
+     *         non-proxy-hosts: "localhost|.*\\.internal"
      * }</pre>
      */
     public static class ProxyConfig {

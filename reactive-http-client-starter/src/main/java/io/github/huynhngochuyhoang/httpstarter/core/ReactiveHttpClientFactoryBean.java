@@ -97,7 +97,9 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 circuitBreakerRegistry, retryRegistry, bulkheadRegistry);
         ObjectMapper objectMapper = applicationContext.getBeanProvider(ObjectMapper.class).getIfAvailable();
 
-        validatePerMethodResilienceInstances(type, metadataCache, resilienceOperatorApplier, clientName);
+        if (config.getResilience() != null && config.getResilience().isEnabled()) {
+            validatePerMethodResilienceInstances(type, metadataCache, resilienceOperatorApplier, clientName);
+        }
 
         ReactiveClientInvocationHandler handler = new ReactiveClientInvocationHandler(
                 webClient,
@@ -193,6 +195,11 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         ReactiveHttpClientProperties.ProxyConfig proxy = resolveProxy(config, resolvedNetworkConfig);
         if (proxy != null && proxy.getType() != ReactiveHttpClientProperties.ProxyConfig.Type.NONE
                 && StringUtils.hasText(proxy.getHost())) {
+            if (proxy.getPort() <= 0) {
+                throw new IllegalArgumentException(
+                        "Proxy host is set but port is invalid (got " + proxy.getPort() + "). "
+                                + "Set reactive.http.clients." + clientName + ".proxy.port (or reactive.http.network.proxy.port) to a valid port > 0.");
+            }
             httpClient = HttpProxyApplier.apply(httpClient, proxy);
         }
 
@@ -326,7 +333,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                                                       ResilienceOperatorApplier applier,
                                                       String clientName) {
         List<String> missing = new ArrayList<>();
-        for (Method method : clientInterface.getDeclaredMethods()) {
+        for (Method method : clientInterface.getMethods()) {
             if (method.isSynthetic() || method.isDefault() || method.isBridge()) continue;
             MethodMetadata meta;
             try {

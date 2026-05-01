@@ -109,6 +109,9 @@ class PerMethodResilienceTest {
         ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
         ReactiveHttpClientProperties.ClientConfig clientConfig = new ReactiveHttpClientProperties.ClientConfig();
         clientConfig.setBaseUrl("http://test.local");
+        ReactiveHttpClientProperties.ResilienceConfig resilienceConfig = new ReactiveHttpClientProperties.ResilienceConfig();
+        resilienceConfig.setEnabled(true);
+        clientConfig.setResilience(resilienceConfig);
         properties.getClients().put("ghost-client", clientConfig);
         ctx.getBeanFactory().registerSingleton("reactiveHttpClientProperties", properties);
 

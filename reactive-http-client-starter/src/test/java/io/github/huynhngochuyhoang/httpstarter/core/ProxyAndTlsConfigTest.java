@@ -78,12 +78,13 @@ class ProxyAndTlsConfigTest {
         proxy.setPassword("p");
         proxy.setNonProxyHosts("localhost|.*\\.internal");
 
-        HttpClient configured = HttpProxyApplier.apply(HttpClient.create(), proxy);
+        HttpClient original = HttpClient.create();
+        HttpClient configured = HttpProxyApplier.apply(original, proxy);
 
         assertThat(configured)
                 .as("apply() must return a different HttpClient instance with proxy attached")
                 .isNotNull()
-                .isNotSameAs(HttpClient.create());
+                .isNotSameAs(original);
         assertThat(configured.configuration().hasProxy())
                 .as("Reactor Netty configuration must report hasProxy() == true")
                 .isTrue();
