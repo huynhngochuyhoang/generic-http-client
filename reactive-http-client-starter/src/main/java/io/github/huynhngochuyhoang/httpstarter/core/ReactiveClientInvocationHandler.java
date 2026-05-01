@@ -175,7 +175,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     return ub.build(resolved.pathVars());
                 });
 
-        boolean hasAcceptHeader = resolved.headers().containsKey(HttpHeaders.ACCEPT);
+        boolean hasAcceptHeader = resolved.headers().keySet().stream()
+                .anyMatch(HttpHeaders.ACCEPT::equalsIgnoreCase);
         String contentTypeHeader = getContentTypeHeaderIgnoreCase(resolved.headers());
         boolean hasContentTypeHeader = contentTypeHeader != null;
         if (!hasAcceptHeader) {
