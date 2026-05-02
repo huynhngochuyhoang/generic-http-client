@@ -434,25 +434,31 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         });
     }
 
+    @SuppressWarnings("unchecked")
     private Mono<? extends Throwable> decodeErrorResponse(ClientResponse response) {
         int statusCode = response.statusCode().value();
-        return errorDecoder.decode(response)
-                .onErrorResume(decodeError -> {
-                    // The body could not be decoded (e.g. DataBufferLimitException, charset error).
-                    // Always wrap in the correct domain exception so callers see the HTTP context,
-                    // not a raw codec/IO error. The original decode failure is attached as the cause
-                    // so operators can distinguish "502 with unreadable body" from a plain 502 (3.6).
-                    response.releaseBody()
-                            .onErrorResume(releaseError -> Mono.empty())
-                            .subscribe();
-                    Throwable wrapped;
-                    if (statusCode >= 400 && statusCode < 500) {
-                        wrapped = new HttpClientException(statusCode, "", null, null, decodeError);
-                    } else {
-                        wrapped = new RemoteServiceException(statusCode, "", null, null, decodeError);
-                    }
-                    return Mono.just(wrapped);
-                });
+        // Cast to Mono<Throwable> to avoid wildcard capture problems with onErrorResume.
+        Mono<Throwable> decoded = (Mono<Throwable>) errorDecoder.decode(response);
+        return decoded.onErrorResume(decodeError -> buildFallbackException(statusCode, decodeError, response));
+    }
+
+    /**
+     * Builds a fallback domain exception when error-body decoding itself fails.
+     * The original HTTP status is preserved so callers always see the correct error category.
+     * The decoding failure is attached as the cause so operators can distinguish
+     * "502 with unreadable body" from a clean 502 response.
+     */
+    private Mono<Throwable> buildFallbackException(int statusCode, Throwable decodeError, ClientResponse response) {
+        response.releaseBody()
+                .onErrorResume(releaseError -> Mono.empty())
+                .subscribe();
+        Throwable wrapped;
+        if (statusCode >= 400 && statusCode < 500) {
+            wrapped = new HttpClientException(statusCode, "", null, null, decodeError);
+        } else {
+            wrapped = new RemoteServiceException(statusCode, "", null, null, decodeError);
+        }
+        return Mono.just(wrapped);
     }
 
     @SuppressWarnings("unchecked")
@@ -563,6 +569,18 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private void logResilienceOperatorFailure(String operatorType, String instanceName, Exception error) {
         String key = operatorType + ":" + instanceName;
+        // Guard the set against unbounded growth when dynamic instance names are used (e.g. per-tenant).
+        // Once the cap is reached, log a one-time overflow warning and stop tracking new keys.
+        if (resilienceWarningKeys.size() >= MAX_RESILIENCE_WARNING_KEYS) {
+            if (resilienceWarningKeysLimitWarningLogged.compareAndSet(false, true)) {
+                log.warn("Resilience4j warning-key set reached configured limit ({}). "
+                        + "Subsequent resilience operator failures will be logged at DEBUG only.",
+                        MAX_RESILIENCE_WARNING_KEYS);
+            }
+            log.debug("Resilience4j {} operator not applied (instance='{}'): {}",
+                    operatorType, instanceName, error.getMessage());
+            return;
+        }
         if (resilienceWarningKeys.add(key)) {
             log.warn("Resilience4j {} operator could not be applied (instance='{}'). Requests will proceed without this protection. Cause: {}",
                     operatorType, instanceName, error.getMessage());
@@ -935,5 +953,22 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private record SerializedRequestBody(Object originalBody, Object bodyToWrite, byte[] rawBody) {}
+
+    // -------------------------------------------------------------------------
+    // Package-private accessors for unit tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * Exposes the {@link #logResilienceOperatorFailure} logic to tests in the same package
+     * so they can drive the resilience-warning-key cap without needing a running WebClient.
+     */
+    void testOnlyLogResilienceOperatorFailure(String operatorType, String instanceName, Exception error) {
+        logResilienceOperatorFailure(operatorType, instanceName, error);
+    }
+
+    /** Returns the current size of the resilience-warning-key deduplication set. */
+    int testOnlyResilienceWarningKeysSize() {
+        return resilienceWarningKeys.size();
+    }
 
 }

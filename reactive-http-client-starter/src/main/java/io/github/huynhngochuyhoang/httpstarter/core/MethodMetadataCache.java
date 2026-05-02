@@ -19,7 +19,7 @@ public class MethodMetadataCache {
     private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000; // 30 minutes
 
     private final ConcurrentHashMap<Method, MethodMetadata> cache = new ConcurrentHashMap<>();
-    // Tracks which methods have already had a blank-path warning emitted (3.5: once per method).
+    // Tracks which methods have already had a blank-path warning emitted so the warning fires exactly once per method.
     private final ConcurrentHashMap<Method, Boolean> blankPathWarned = new ConcurrentHashMap<>();
 
     private static final org.slf4j.Logger log =
@@ -52,10 +52,10 @@ public class MethodMetadataCache {
             meta.setPathTemplate(method.getAnnotation(PATCH.class).value());
         }
 
-        // 3.5 – Warn once per method when the path template is blank.
+        // Warn once per method when the path template is blank.
         // Blank paths are occasionally intentional (resolves to the base URL) but are far
         // more often a copy-paste mistake that only surfaces in staging. A single per-method
-        // WARNING makes them easy to spot in logs without hard-failing user code.
+        // warning makes them easy to spot in logs without hard-failing user code.
         if (meta.getHttpMethod() != null
                 && (meta.getPathTemplate() == null || meta.getPathTemplate().isBlank())) {
             blankPathWarned.computeIfAbsent(method, m -> {

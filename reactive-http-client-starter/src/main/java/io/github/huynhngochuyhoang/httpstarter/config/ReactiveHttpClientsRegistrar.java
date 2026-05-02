@@ -56,7 +56,7 @@ public class ReactiveHttpClientsRegistrar implements ImportBeanDefinitionRegistr
         ClassPathScanningCandidateComponentProvider scanner = buildScanner();
 
         // Collect all candidates first so we can detect duplicate client names before
-        // registering any bean definitions (3.3: fail fast on duplicate names).
+        // registering any bean definitions.
         List<Class<?>> candidates = new ArrayList<>();
         for (String basePackage : basePackages) {
             for (BeanDefinition candidate : scanner.findCandidateComponents(basePackage)) {
@@ -72,7 +72,7 @@ public class ReactiveHttpClientsRegistrar implements ImportBeanDefinitionRegistr
         }
 
         // Detect duplicate client names: two interfaces with the same @ReactiveHttpClient(name)
-        // would share a pool by reference with no error — fail fast with a clear message (3.3).
+        // would silently share a connection pool — fail fast with a descriptive message.
         Map<String, String> seenNames = new HashMap<>();
         for (Class<?> interfaceClass : candidates) {
             ReactiveHttpClient annotation = interfaceClass.getAnnotation(ReactiveHttpClient.class);

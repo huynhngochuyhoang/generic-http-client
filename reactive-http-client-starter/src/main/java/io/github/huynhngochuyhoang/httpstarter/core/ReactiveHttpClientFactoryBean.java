@@ -185,8 +185,9 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 ? networkConfig
                 : new ReactiveHttpClientProperties.NetworkConfig();
         ReactiveHttpClientProperties.ConnectionPoolConfig pool = resolveConnectionPool(config, resolvedNetworkConfig);
-        // Include the interface FQN in the pool name so two clients with the same logical
-        // name (but different interfaces) never silently share a pool (3.3 belt-and-braces).
+        // Include the interface fully-qualified name in the pool name so two clients that
+        // share the same logical name but correspond to different interfaces never silently
+        // share a connection pool.
         String poolName = "reactive-http-client-" + clientName
                 + (type != null ? "-" + type.getName() : "");
         ConnectionProvider.Builder providerBuilder = ConnectionProvider.builder(poolName)
@@ -204,7 +205,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         if (pool.isMetricsEnabled()) {
             providerBuilder.metrics(true);
         }
-        // Store the provider so DisposableBean.destroy() can shut it down cleanly (3.8).
+        // Store the provider on the instance field so destroy() can dispose it cleanly on context shutdown.
         this.connectionProvider = providerBuilder.build();
 
         HttpClient httpClient = HttpClient.create(connectionProvider)
@@ -281,7 +282,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         return networkConfig != null ? networkConfig.getTls() : null;
     }
 
-    private int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
+    int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
         int sizeMb = config.getCodecMaxInMemorySizeMb();
         if (sizeMb < 0) {
             throw new IllegalArgumentException(
