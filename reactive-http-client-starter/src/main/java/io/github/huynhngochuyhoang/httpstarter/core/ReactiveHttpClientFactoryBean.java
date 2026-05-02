@@ -157,9 +157,10 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     public void destroy() {
         if (connectionProvider != null) {
             connectionProvider.disposeLater()
-                    .doOnError(e -> log.warn("Error while disposing ConnectionProvider for client [{}]: {}",
-                            type != null ? type.getSimpleName() : "?", e.getMessage()))
-                    .subscribe();
+                    .subscribe(
+                            null,
+                            e -> log.warn("Error while disposing ConnectionProvider for client [{}]",
+                                    type != null ? type.getSimpleName() : "?", e));
         }
     }
 
@@ -208,7 +209,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         // Store the provider on the instance field so destroy() can dispose it cleanly on context shutdown.
         this.connectionProvider = providerBuilder.build();
 
-        HttpClient httpClient = HttpClient.create(connectionProvider)
+        HttpClient httpClient = HttpClient.create(this.connectionProvider)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, resolvedNetworkConfig.getConnectTimeoutMs())
                 .doOnConnected(connection -> {
                     // Safety-net handlers: fire if a connection gets stuck in the pool beyond the configured limit.

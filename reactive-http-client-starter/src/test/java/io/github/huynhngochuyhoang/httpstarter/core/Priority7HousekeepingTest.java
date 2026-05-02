@@ -102,7 +102,9 @@ class Priority7HousekeepingTest {
         for (int i = 0; i < 5; i++) {
             cache.get(method);
         }
-        // No exception means the blank-path warning did not escalate into a hard failure.
+
+        assertEquals(1, cache.testOnlyBlankPathWarnedCount(),
+                "Blank-path warning must be recorded exactly once per method, not once per parse call");
     }
 
     // -------------------------------------------------------------------------

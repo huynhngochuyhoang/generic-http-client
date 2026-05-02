@@ -447,18 +447,21 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      * The original HTTP status is preserved so callers always see the correct error category.
      * The decoding failure is attached as the cause so operators can distinguish
      * "502 with unreadable body" from a clean 502 response.
+     *
+     * <p>The response body is released within the reactive chain so that cleanup participates
+     * in the same backpressure/cancellation scope as the caller — no unmanaged subscriptions.
      */
     private Mono<Throwable> buildFallbackException(int statusCode, Throwable decodeError, ClientResponse response) {
-        response.releaseBody()
-                .onErrorResume(releaseError -> Mono.empty())
-                .subscribe();
         Throwable wrapped;
         if (statusCode >= 400 && statusCode < 500) {
             wrapped = new HttpClientException(statusCode, "", null, null, decodeError);
         } else {
             wrapped = new RemoteServiceException(statusCode, "", null, null, decodeError);
         }
-        return Mono.just(wrapped);
+        Throwable finalWrapped = wrapped;
+        return response.releaseBody()
+                .onErrorResume(releaseError -> Mono.empty())
+                .thenReturn(finalWrapped);
     }
 
     @SuppressWarnings("unchecked")

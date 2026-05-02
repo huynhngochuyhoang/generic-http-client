@@ -29,6 +29,14 @@ public class MethodMetadataCache {
         return cache.computeIfAbsent(method, this::parse);
     }
 
+    /**
+     * Returns the number of methods for which a blank-path warning has been emitted.
+     * Package-private; used only in unit tests to verify the warn-once deduplication.
+     */
+    int testOnlyBlankPathWarnedCount() {
+        return blankPathWarned.size();
+    }
+
     private MethodMetadata parse(Method method) {
         MethodMetadata meta = new MethodMetadata();
         meta.setMethod(method);

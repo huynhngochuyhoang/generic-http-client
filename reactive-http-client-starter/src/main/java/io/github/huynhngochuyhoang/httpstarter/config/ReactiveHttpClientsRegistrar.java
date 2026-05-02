@@ -18,6 +18,7 @@ import org.springframework.util.ClassUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,19 +58,26 @@ public class ReactiveHttpClientsRegistrar implements ImportBeanDefinitionRegistr
 
         // Collect all candidates first so we can detect duplicate client names before
         // registering any bean definitions.
-        List<Class<?>> candidates = new ArrayList<>();
+        // Use a LinkedHashMap keyed by class name to de-duplicate candidates that may appear
+        // more than once when base packages overlap (e.g. both "com.example" and
+        // "com.example.sub" are configured and contain the same interface).
+        LinkedHashMap<String, Class<?>> candidateByClassName = new LinkedHashMap<>();
         for (String basePackage : basePackages) {
             for (BeanDefinition candidate : scanner.findCandidateComponents(basePackage)) {
                 String interfaceClassName = candidate.getBeanClassName();
+                if (candidateByClassName.containsKey(interfaceClassName)) {
+                    continue; // already seen from an overlapping package scan
+                }
                 try {
                     Class<?> interfaceClass = ClassUtils.resolveClassName(interfaceClassName, null);
-                    candidates.add(interfaceClass);
+                    candidateByClassName.put(interfaceClassName, interfaceClass);
                 } catch (IllegalArgumentException e) {
                     throw new IllegalStateException(
                             "Could not load @ReactiveHttpClient interface: " + interfaceClassName, e);
                 }
             }
         }
+        List<Class<?>> candidates = new ArrayList<>(candidateByClassName.values());
 
         // Detect duplicate client names: two interfaces with the same @ReactiveHttpClient(name)
         // would silently share a connection pool — fail fast with a descriptive message.
