@@ -11,6 +11,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -36,14 +37,14 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Registered automatically by {@link io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientsRegistrar}.
  */
-public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, ApplicationContextAware {
+public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, ApplicationContextAware, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
-    private static final int DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB = 2;
     private static final int MAX_CODEC_MAX_IN_MEMORY_SIZE_MB = Integer.MAX_VALUE / (1024 * 1024);
 
     private Class<T> type;
     private ApplicationContext applicationContext;
+    private ConnectionProvider connectionProvider;
 
     // -------------------------------------------------------------------------
     // FactoryBean contract
@@ -143,6 +144,26 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     }
 
     // -------------------------------------------------------------------------
+    // DisposableBean
+    // -------------------------------------------------------------------------
+
+    /**
+     * Disposes the {@link ConnectionProvider} created for this client when the
+     * Spring context shuts down. Without this, the pool leaks — harmless in a
+     * normal JVM exit but problematic in test suites that reload the context
+     * many times (OOM on repeated context cycles) and in hot-reload scenarios.
+     */
+    @Override
+    public void destroy() {
+        if (connectionProvider != null) {
+            connectionProvider.disposeLater()
+                    .doOnError(e -> log.warn("Error while disposing ConnectionProvider for client [{}]: {}",
+                            type != null ? type.getSimpleName() : "?", e.getMessage()))
+                    .subscribe();
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Setters (called by Spring's BeanDefinitionBuilder)
     // -------------------------------------------------------------------------
 
@@ -164,7 +185,11 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 ? networkConfig
                 : new ReactiveHttpClientProperties.NetworkConfig();
         ReactiveHttpClientProperties.ConnectionPoolConfig pool = resolveConnectionPool(config, resolvedNetworkConfig);
-        ConnectionProvider.Builder providerBuilder = ConnectionProvider.builder("reactive-http-client-" + clientName)
+        // Include the interface FQN in the pool name so two clients with the same logical
+        // name (but different interfaces) never silently share a pool (3.3 belt-and-braces).
+        String poolName = "reactive-http-client-" + clientName
+                + (type != null ? "-" + type.getName() : "");
+        ConnectionProvider.Builder providerBuilder = ConnectionProvider.builder(poolName)
                 .maxConnections(Math.max(1, pool.getMaxConnections()))
                 .pendingAcquireTimeout(Duration.ofMillis(Math.max(0, pool.getPendingAcquireTimeoutMs())));
         if (pool.getMaxIdleTimeMs() > 0) {
@@ -179,7 +204,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         if (pool.isMetricsEnabled()) {
             providerBuilder.metrics(true);
         }
-        ConnectionProvider connectionProvider = providerBuilder.build();
+        // Store the provider so DisposableBean.destroy() can shut it down cleanly (3.8).
+        this.connectionProvider = providerBuilder.build();
 
         HttpClient httpClient = HttpClient.create(connectionProvider)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, resolvedNetworkConfig.getConnectTimeoutMs())
@@ -256,9 +282,18 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     }
 
     private int resolveCodecMaxInMemorySizeBytes(ReactiveHttpClientProperties.ClientConfig config) {
-        int sizeMb = config.getCodecMaxInMemorySizeMb() > 0
-                ? config.getCodecMaxInMemorySizeMb()
-                : DEFAULT_CODEC_MAX_IN_MEMORY_SIZE_MB;
+        int sizeMb = config.getCodecMaxInMemorySizeMb();
+        if (sizeMb < 0) {
+            throw new IllegalArgumentException(
+                    "reactive.http.clients.*.codec-max-in-memory-size-mb must be >= 0 but was " + sizeMb
+                            + ". Use 0 for unlimited, or a positive value to set a cap in MiB.");
+        }
+        if (sizeMb == 0) {
+            // 0 means "unlimited" — pass -1 to Spring's codec configuration.
+            log.warn("reactive.http.clients.*.codec-max-in-memory-size-mb is 0: codec buffer limit is disabled (unlimited). "
+                    + "Set a positive value to enforce a cap and avoid out-of-memory errors on large responses.");
+            return -1;
+        }
         if (sizeMb > MAX_CODEC_MAX_IN_MEMORY_SIZE_MB) {
             throw new IllegalArgumentException("reactive.http.clients.*.codec-max-in-memory-size-mb must be <= "
                     + MAX_CODEC_MAX_IN_MEMORY_SIZE_MB + " but was " + sizeMb);

@@ -80,6 +80,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveClientInvocationHandler.class);
     private static final int MAX_LOGGER_CACHE_SIZE = 256;
+    private static final int MAX_RESILIENCE_WARNING_KEYS = 256;
 
     private final WebClient webClient;
     private final MethodMetadataCache metadataCache;
@@ -91,6 +92,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private final Map<Class<? extends HttpExchangeLogger>, HttpExchangeLogger> loggerCache = new ConcurrentHashMap<>();
     private final AtomicBoolean loggerCacheLimitWarningLogged = new AtomicBoolean(false);
     private final Set<String> resilienceWarningKeys = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean resilienceWarningKeysLimitWarningLogged = new AtomicBoolean(false);
 
     private final ResilienceOperatorApplier resilienceOperatorApplier;
     private final ObjectMapper objectMapper;
@@ -433,10 +435,24 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private Mono<? extends Throwable> decodeErrorResponse(ClientResponse response) {
+        int statusCode = response.statusCode().value();
         return errorDecoder.decode(response)
-                .onErrorResume(decodeError -> response.releaseBody()
-                        .onErrorResume(releaseError -> Mono.empty())
-                        .then(Mono.error(decodeError)));
+                .onErrorResume(decodeError -> {
+                    // The body could not be decoded (e.g. DataBufferLimitException, charset error).
+                    // Always wrap in the correct domain exception so callers see the HTTP context,
+                    // not a raw codec/IO error. The original decode failure is attached as the cause
+                    // so operators can distinguish "502 with unreadable body" from a plain 502 (3.6).
+                    response.releaseBody()
+                            .onErrorResume(releaseError -> Mono.empty())
+                            .subscribe();
+                    Throwable wrapped;
+                    if (statusCode >= 400 && statusCode < 500) {
+                        wrapped = new HttpClientException(statusCode, "", null, null, decodeError);
+                    } else {
+                        wrapped = new RemoteServiceException(statusCode, "", null, null, decodeError);
+                    }
+                    return Mono.just(wrapped);
+                });
     }
 
     @SuppressWarnings("unchecked")

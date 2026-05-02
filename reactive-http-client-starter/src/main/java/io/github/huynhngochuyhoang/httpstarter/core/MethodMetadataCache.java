@@ -16,7 +16,14 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MethodMetadataCache {
 
+    private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000; // 30 minutes
+
     private final ConcurrentHashMap<Method, MethodMetadata> cache = new ConcurrentHashMap<>();
+    // Tracks which methods have already had a blank-path warning emitted (3.5: once per method).
+    private final ConcurrentHashMap<Method, Boolean> blankPathWarned = new ConcurrentHashMap<>();
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(MethodMetadataCache.class);
 
     public MethodMetadata get(Method method) {
         return cache.computeIfAbsent(method, this::parse);
@@ -43,6 +50,22 @@ public class MethodMetadataCache {
         } else if (method.isAnnotationPresent(PATCH.class)) {
             meta.setHttpMethod("PATCH");
             meta.setPathTemplate(method.getAnnotation(PATCH.class).value());
+        }
+
+        // 3.5 – Warn once per method when the path template is blank.
+        // Blank paths are occasionally intentional (resolves to the base URL) but are far
+        // more often a copy-paste mistake that only surfaces in staging. A single per-method
+        // WARNING makes them easy to spot in logs without hard-failing user code.
+        if (meta.getHttpMethod() != null
+                && (meta.getPathTemplate() == null || meta.getPathTemplate().isBlank())) {
+            blankPathWarned.computeIfAbsent(method, m -> {
+                log.warn("@{} on {}.{}() has a blank path template — this resolves to the client base URL. "
+                                + "If this is intentional you can ignore this warning.",
+                        meta.getHttpMethod(),
+                        method.getDeclaringClass().getSimpleName(),
+                        method.getName());
+                return Boolean.TRUE;
+            });
         }
 
         // ---- Parameters ----
@@ -136,6 +159,11 @@ public class MethodMetadataCache {
             if (timeoutMs.value() < 0) {
                 throw new IllegalArgumentException(
                         "@TimeoutMs value must be non-negative (>= 0) for method: " + method);
+            }
+            if (timeoutMs.value() > MAX_TIMEOUT_MS) {
+                throw new IllegalArgumentException(
+                        "@TimeoutMs value must be <= " + MAX_TIMEOUT_MS + " ms (30 minutes) but was "
+                                + timeoutMs.value() + " for method: " + method);
             }
             meta.setTimeoutMs(timeoutMs.value());
         }
