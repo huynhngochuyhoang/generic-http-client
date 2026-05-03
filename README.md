@@ -14,12 +14,32 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 
 ---
 
-## 1) Support level vs Spring `@HttpExchange` (current starter)
+## Documentation
 
-### Overall assessment
+| Guide | Description |
+|---|---|
+| [Quick Start](docs/01-quick-start.md) | Add the dependency, declare a client, and inject it |
+| [Annotation Reference](docs/02-annotations.md) | All annotations with examples |
+| [Error Handling](docs/03-error-handling.md) | Exception hierarchy, error categories, and reactive operators |
+| [Timeouts](docs/04-timeouts.md) | Timeout layers, precedence model, and per-method override |
+| [Connection Pool](docs/05-connection-pool.md) | Pool tuning, per-client overrides, and pool metrics |
+| [Outbound Auth Providers](docs/06-auth-providers.md) | Bearer, OAuth2, HMAC, API key, and custom providers |
+| [Resilience4j Integration](docs/07-resilience4j.md) | Retry, circuit breaker, bulkhead, and per-method overrides |
+| [Observability](docs/08-observability.md) | Micrometer metrics, health indicator, OpenTelemetry tracing |
+| [Correlation ID](docs/09-correlation-id.md) | Inbound capture, outbound propagation, and inbound header filtering |
+| [Multipart Uploads](docs/10-multipart.md) | `@MultipartBody`, `@FormField`, `@FormFile`, and `FileAttachment` |
+| [Streaming Responses](docs/11-streaming.md) | `Flux<DataBuffer>` and `Mono<ResponseEntity<Flux<DataBuffer>>>` |
+| [Proxy & TLS / mTLS](docs/12-proxy-tls.md) | HTTP proxy routing and custom TLS/mTLS configuration |
+| [Exchange Logging](docs/13-exchange-logging.md) | `@LogHttpExchange`, `HttpExchangeLogger`, and custom loggers |
+| [Test Helpers](docs/14-test-helpers.md) | `MockReactiveHttpClient`, `RecordedExchange`, `ErrorCategoryAssertions` |
 
-**Support level:** the starter is a **higher-level opinionated layer** on top of WebFlux, while Spring `@HttpExchange` is a **lower-level declarative HTTP interface**.  
-**Current fit:** if you only need declarative HTTP mapping, `@HttpExchange` is enough; if you need built-in cross-cutting concerns (resilience, auth strategy, observability, network policy), this starter provides broader support out of the box.
+---
+
+## 1) Why reactive-http-client beats Spring `@HttpExchange`
+
+### Overview
+
+Spring's `@HttpExchange` gives you declarative HTTP mapping and nothing more. **reactive-http-client** starts where `@HttpExchange` stops: it adds a production-ready platform of cross-cutting concerns — resilience, auth strategy, structured observability, network policy, and test helpers — wired and opinionated from day one, so you write business logic instead of boilerplate infrastructure.
 
 | Capability | This starter | Spring `@HttpExchange` |
 |---|---|---|
@@ -34,8 +54,8 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 
 ### Practical conclusion
 
-- Choose **Spring `@HttpExchange`** when you want minimal abstraction and full manual control.
-- Choose this **starter** when you want a ready-to-use platform for outbound HTTP governance with consistent policies across clients.
+- Choose this **starter** when you want a ready-to-use platform for outbound HTTP governance with consistent policies, resilience, auth, and observability across every client — with zero boilerplate infrastructure.
+- Choose **Spring `@HttpExchange`** when you prefer minimal abstraction and full manual control over cross-cutting concerns.
 
 ---
 
