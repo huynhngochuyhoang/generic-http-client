@@ -32,6 +32,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 | [Proxy & TLS / mTLS](docs/12-proxy-tls.md) | HTTP proxy routing and custom TLS/mTLS configuration |
 | [Exchange Logging](docs/13-exchange-logging.md) | `@LogHttpExchange`, `HttpExchangeLogger`, and custom loggers |
 | [Test Helpers](docs/14-test-helpers.md) | `MockReactiveHttpClient`, `RecordedExchange`, `ErrorCategoryAssertions` |
+| [Per-Client Customizer](docs/15-customizer.md) | `ReactiveHttpClientCustomizer` — add custom filters without rebuilding `WebClient` |
 
 ---
 
@@ -365,6 +366,39 @@ public interface ObjectStoreClient {
 Buffers are released by Reactor Netty as the consumer drives the `Flux`,
 so memory usage stays bounded regardless of payload size. Standard
 observability (duration, response size from `Content-Length`) still applies.
+
+### 2.5.5 Per-client WebClient customizer
+
+Register one or more `ReactiveHttpClientCustomizer` beans to attach custom
+`ExchangeFilterFunction`s (or any other `WebClient.Builder` customization) to
+specific clients without recreating a raw `WebClient`:
+
+```java
+@Component
+public class RequestSigningCustomizer implements ReactiveHttpClientCustomizer {
+
+    @Override
+    public boolean supports(String clientName) {
+        return "payment-service".equals(clientName);
+    }
+
+    @Override
+    public void customize(WebClient.Builder builder) {
+        builder.filter((request, next) -> {
+            ClientRequest signed = ClientRequest.from(request)
+                .header("X-Signature", signer.sign(request))
+                .build();
+            return next.exchange(signed);
+        });
+    }
+}
+```
+
+- `supports(clientName)` defaults to `true` — omit it to apply the customizer to **all** clients.
+- Multiple customizers run in `@Order / Ordered` sequence.
+- Customizers run after built-in filters (correlation-ID, auth, exchange logging).
+
+See [Per-Client Customizer](docs/15-customizer.md) for the full reference.
 
 ### 2.6 Inject and use
 

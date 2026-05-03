@@ -6,14 +6,16 @@ import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperti
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
+import org.springframework.core.annotation.Order;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,9 +92,13 @@ class ReactiveHttpClientCustomizerTest {
     }
 
     @Test
-    void factoryBean_appliesAllMatchingCustomizers_inRegistrationOrder() throws Exception {
+    void factoryBean_appliesAllMatchingCustomizers_inStreamOrder() throws Exception {
         List<String> invocationOrder = new ArrayList<>();
 
+        // orderedStream() delivers customizers in the order the stream provides them.
+        // When no @Order is declared, Spring preserves bean-registration order.
+        // The mock directly controls the stream, so "first/second/third" represents
+        // whatever order orderedStream() would produce (could be @Order-sorted in a real context).
         ReactiveHttpClientCustomizer first = builder -> invocationOrder.add("first");
         ReactiveHttpClientCustomizer second = builder -> invocationOrder.add("second");
         ReactiveHttpClientCustomizer third = builder -> invocationOrder.add("third");
@@ -102,6 +108,28 @@ class ReactiveHttpClientCustomizerTest {
         try {
             factoryBean.getObject();
             assertEquals(List.of("first", "second", "third"), invocationOrder);
+        } finally {
+            factoryBean.destroy();
+        }
+    }
+
+    @Test
+    void factoryBean_honorsAtOrderAnnotation_onCustomizerBeans() throws Exception {
+        List<String> invocationOrder = new ArrayList<>();
+
+        // Deliver customizers in the order that Spring's AnnotationAwareOrderComparator
+        // (used internally by orderedStream()) would produce for @Order-annotated beans.
+        List<ReactiveHttpClientCustomizer> customizers = Arrays.asList(
+                new Order2Customizer(invocationOrder),
+                new Order3Customizer(invocationOrder),
+                new Order1Customizer(invocationOrder));
+        customizers.sort(AnnotationAwareOrderComparator.INSTANCE);
+
+        ReactiveHttpClientFactoryBean<PingClient> factoryBean = buildFactoryBean(customizers);
+        try {
+            factoryBean.getObject();
+            assertEquals(List.of("order-1", "order-2", "order-3"), invocationOrder,
+                    "Customizers must be applied in @Order-sorted sequence");
         } finally {
             factoryBean.destroy();
         }
@@ -249,5 +277,28 @@ class ReactiveHttpClientCustomizerTest {
     interface PingClient {
         @GET("/ping")
         Mono<String> ping();
+    }
+
+    // ---- Static inner classes for @Order test ----------------------------
+
+    @Order(1)
+    private static class Order1Customizer implements ReactiveHttpClientCustomizer {
+        private final List<String> log;
+        Order1Customizer(List<String> log) { this.log = log; }
+        @Override public void customize(WebClient.Builder builder) { log.add("order-1"); }
+    }
+
+    @Order(2)
+    private static class Order2Customizer implements ReactiveHttpClientCustomizer {
+        private final List<String> log;
+        Order2Customizer(List<String> log) { this.log = log; }
+        @Override public void customize(WebClient.Builder builder) { log.add("order-2"); }
+    }
+
+    @Order(3)
+    private static class Order3Customizer implements ReactiveHttpClientCustomizer {
+        private final List<String> log;
+        Order3Customizer(List<String> log) { this.log = log; }
+        @Override public void customize(WebClient.Builder builder) { log.add("order-3"); }
     }
 }
