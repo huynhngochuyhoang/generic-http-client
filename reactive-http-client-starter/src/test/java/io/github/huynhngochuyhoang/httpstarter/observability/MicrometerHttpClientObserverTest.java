@@ -5,11 +5,11 @@ import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.distribution.CountAtBucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -284,20 +284,33 @@ class MicrometerHttpClientObserverTest {
         ReactiveHttpClientProperties.ObservabilityConfig config =
                 new ReactiveHttpClientProperties.ObservabilityConfig();
         config.getHistogram().setEnabled(true);
-        // slo-boundaries-ms left at default
+        // slo-boundaries-ms left at default: [50, 100, 200, 500, 1000, 2000, 5000]
 
         MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(meterRegistry, config);
 
         observer.record(new HttpClientObserverEvent(
                 "svc", "api.op", "GET", "/ping",
-                200, 50, null, null, null, null
+                200, 75, null, null, null, null
         ));
 
         Timer histogramTimer = meterRegistry.find("reactive.http.client.requests.latency").timer();
         assertNotNull(histogramTimer, "latency histogram must be present");
-        // Verify default SLO list is [50, 100, 200, 500, 1000, 2000, 5000]
-        List<Long> expected = Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L);
-        assertEquals(expected, config.getHistogram().getSloBoundariesMs());
+
+        CountAtBucket[] buckets = histogramTimer.takeSnapshot().histogramCounts();
+        assertEquals(7, buckets.length, "expected 7 default SLO histogram buckets");
+
+        // Boundaries are stored in nanoseconds (50ms = 50_000_000 ns)
+        double[] expectedNanos = {
+            50_000_000.0, 100_000_000.0, 200_000_000.0, 500_000_000.0,
+            1_000_000_000.0, 2_000_000_000.0, 5_000_000_000.0
+        };
+        for (int i = 0; i < expectedNanos.length; i++) {
+            assertEquals(expectedNanos[i], buckets[i].bucket(), 0.0,
+                    "bucket[" + i + "] boundary should be " + (long)(expectedNanos[i] / 1_000_000) + "ms");
+        }
+        // 75ms falls in the 100ms bucket (cumulative count = 1); not in the 50ms bucket (count = 0)
+        assertEquals(0.0, buckets[0].count(), 0.0, "75ms should not be counted in the 50ms bucket");
+        assertEquals(1.0, buckets[1].count(), 0.0, "75ms should be counted in the 100ms bucket");
     }
 
     @Test
@@ -318,6 +331,15 @@ class MicrometerHttpClientObserverTest {
         Timer histogramTimer = meterRegistry.find("reactive.http.client.requests.latency").timer();
         assertNotNull(histogramTimer, "latency histogram must be present with custom SLO buckets");
         assertEquals(1, histogramTimer.count());
+
+        CountAtBucket[] buckets = histogramTimer.takeSnapshot().histogramCounts();
+        assertEquals(3, buckets.length, "expected 3 custom SLO histogram buckets");
+        assertEquals(10_000_000.0,  buckets[0].bucket(), 0.0, "first bucket should be 10ms");
+        assertEquals(25_000_000.0,  buckets[1].bucket(), 0.0, "second bucket should be 25ms");
+        assertEquals(100_000_000.0, buckets[2].bucket(), 0.0, "third bucket should be 100ms");
+        // 15ms falls in the 25ms bucket (cumulative count = 1); not in the 10ms bucket (count = 0)
+        assertEquals(0.0, buckets[0].count(), 0.0, "15ms should not be counted in the 10ms bucket");
+        assertEquals(1.0, buckets[1].count(), 0.0, "15ms should be counted in the 25ms bucket");
     }
 
     @Test

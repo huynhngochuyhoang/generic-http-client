@@ -20,27 +20,27 @@ import java.util.concurrent.TimeUnit;
  * <table border="1">
  *   <tr><th>Metric</th><th>Type</th><th>Tags</th></tr>
  *   <tr>
- *     <td>{@code reactive.http.client.requests} (configurable)</td>
+ *     <td>{@code <metricName>} (default: {@code reactive.http.client.requests})</td>
  *     <td>Timer (also exposes count + sum)</td>
  *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.attempts}</td>
+ *     <td>{@code <metricName>.attempts}</td>
  *     <td>DistributionSummary (subscription attempts per invocation)</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.request.size}</td>
+ *     <td>{@code <metricName>.request.size}</td>
  *     <td>DistributionSummary (request body bytes; only recorded when measurable — byte[]/String/null bodies)</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.response.size}</td>
+ *     <td>{@code <metricName>.response.size}</td>
  *     <td>DistributionSummary (response body bytes from {@code Content-Length}; skipped for chunked responses)</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  *   <tr>
- *     <td>{@code reactive.http.client.requests.latency} (when histogram enabled)</td>
+ *     <td>{@code <metricName>.latency} (when histogram enabled)</td>
  *     <td>Timer with SLO histogram buckets</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
@@ -98,9 +98,13 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
         if (!config.getHistogram().isEnabled()) {
             return null;
         }
-        return config.getHistogram().getSloBoundariesMs().stream()
+        Duration[] boundaries = config.getHistogram().getSloBoundariesMs().stream()
+                .filter(ms -> ms != null && ms > 0)
+                .distinct()
+                .sorted()
                 .map(Duration::ofMillis)
                 .toArray(Duration[]::new);
+        return boundaries.length > 0 ? boundaries : null;
     }
 
     @Override

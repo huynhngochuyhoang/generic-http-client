@@ -520,7 +520,7 @@
     {
       "name": "reactive.http.observability.histogram.enabled",
       "type": "java.lang.Boolean",
-      "description": "Enable latency histogram (SLO buckets) recorded as reactive.http.client.requests.latency. Default: false.",
+      "description": "Enable latency histogram (SLO buckets) recorded as <metricName>.latency (default: reactive.http.client.requests.latency). Default: false.",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$HistogramConfig",
       "defaultValue": false
     },
