@@ -544,6 +544,9 @@ public class ReactiveHttpClientProperties {
      */
     public static class HistogramConfig {
 
+        private static final List<Long> DEFAULT_SLO_BOUNDARIES_MS =
+                Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L);
+
         /** Enable latency histogram (SLO buckets) on the latency metric. Default: {@code false}. */
         private boolean enabled = false;
 
@@ -552,8 +555,7 @@ public class ReactiveHttpClientProperties {
          * {@code le="<value>"} histogram bucket. Defaults to
          * {@code [50, 100, 200, 500, 1000, 2000, 5000]} if not configured.
          */
-        private List<Long> sloBoundariesMs = new ArrayList<>(
-                Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L));
+        private List<Long> sloBoundariesMs = new ArrayList<>(DEFAULT_SLO_BOUNDARIES_MS);
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -561,7 +563,7 @@ public class ReactiveHttpClientProperties {
         public List<Long> getSloBoundariesMs() { return sloBoundariesMs; }
         public void setSloBoundariesMs(List<Long> sloBoundariesMs) {
             this.sloBoundariesMs = sloBoundariesMs != null ? sloBoundariesMs
-                    : new ArrayList<>(Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L));
+                    : new ArrayList<>(DEFAULT_SLO_BOUNDARIES_MS);
         }
     }
 

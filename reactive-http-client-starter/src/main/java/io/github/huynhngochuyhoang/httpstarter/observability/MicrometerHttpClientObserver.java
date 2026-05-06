@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -83,6 +84,8 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
     private final ReactiveHttpClientProperties.ObservabilityConfig config;
     /** Pre-computed SLO boundaries for the latency histogram; {@code null} when histogram is disabled. */
     private final Duration[] sloBoundaries;
+    /** Cache of histogram Timer instances keyed by low-cardinality tag set to avoid repeated builder allocation. */
+    private final ConcurrentHashMap<Tags, Timer> histogramTimerCache = new ConcurrentHashMap<>();
 
     public MicrometerHttpClientObserver(MeterRegistry meterRegistry,
                                         ReactiveHttpClientProperties.ObservabilityConfig config) {
@@ -126,11 +129,12 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             }
 
             if (sloBoundaries != null) {
-                Timer.builder(config.getMetricName() + ".latency")
-                        .tags(lowCardinalityTags)
-                        .serviceLevelObjectives(sloBoundaries)
-                        .register(meterRegistry)
-                        .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
+                histogramTimerCache.computeIfAbsent(lowCardinalityTags, t ->
+                        Timer.builder(config.getMetricName() + ".latency")
+                                .tags(t)
+                                .serviceLevelObjectives(sloBoundaries)
+                                .register(meterRegistry)
+                ).record(event.getDurationMs(), TimeUnit.MILLISECONDS);
             }
 
             if (log.isDebugEnabled()) {
