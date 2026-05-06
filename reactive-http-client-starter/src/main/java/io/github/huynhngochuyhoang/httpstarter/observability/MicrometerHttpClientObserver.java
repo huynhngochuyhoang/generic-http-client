@@ -4,9 +4,11 @@ import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperti
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +36,11 @@ import java.util.concurrent.TimeUnit;
  *   <tr>
  *     <td>{@code http.client.requests.response.size}</td>
  *     <td>DistributionSummary (response body bytes from {@code Content-Length}; skipped for chunked responses)</td>
+ *     <td>client.name, api.name, http.method, uri</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@code reactive.http.client.requests.latency} (when histogram enabled)</td>
+ *     <td>Timer with SLO histogram buckets</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  * </table>
@@ -74,11 +81,23 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
 
     private final MeterRegistry meterRegistry;
     private final ReactiveHttpClientProperties.ObservabilityConfig config;
+    /** Pre-computed SLO boundaries for the latency histogram; {@code null} when histogram is disabled. */
+    private final Duration[] sloBoundaries;
 
     public MicrometerHttpClientObserver(MeterRegistry meterRegistry,
                                         ReactiveHttpClientProperties.ObservabilityConfig config) {
         this.meterRegistry = meterRegistry;
         this.config = config;
+        this.sloBoundaries = resolveSloBoundaries(config);
+    }
+
+    private static Duration[] resolveSloBoundaries(ReactiveHttpClientProperties.ObservabilityConfig config) {
+        if (!config.getHistogram().isEnabled()) {
+            return null;
+        }
+        return config.getHistogram().getSloBoundariesMs().stream()
+                .map(Duration::ofMillis)
+                .toArray(Duration[]::new);
     }
 
     @Override
@@ -93,22 +112,25 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             meterRegistry.timer(config.getMetricName(), tags)
                     .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
 
-            Tags attemptTags = Tags.of(
-                    Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
-                    Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
-                    Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
-                    Tag.of("uri", config.isIncludeUrlPath() && event.getUriPath() != null ? event.getUriPath() : "NONE")
-            );
-            meterRegistry.summary(config.getMetricName() + ".attempts", attemptTags)
+            Tags lowCardinalityTags = buildLowCardinalityTags(event);
+            meterRegistry.summary(config.getMetricName() + ".attempts", lowCardinalityTags)
                     .record(event.getAttemptCount());
 
             if (event.getRequestBytes() >= 0) {
-                meterRegistry.summary(config.getMetricName() + ".request.size", attemptTags)
+                meterRegistry.summary(config.getMetricName() + ".request.size", lowCardinalityTags)
                         .record(event.getRequestBytes());
             }
             if (event.getResponseBytes() >= 0) {
-                meterRegistry.summary(config.getMetricName() + ".response.size", attemptTags)
+                meterRegistry.summary(config.getMetricName() + ".response.size", lowCardinalityTags)
                         .record(event.getResponseBytes());
+            }
+
+            if (sloBoundaries != null) {
+                Timer.builder(config.getMetricName() + ".latency")
+                        .tags(lowCardinalityTags)
+                        .serviceLevelObjectives(sloBoundaries)
+                        .register(meterRegistry)
+                        .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
             }
 
             if (log.isDebugEnabled()) {
@@ -123,6 +145,18 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             // Never let observability failures propagate to business logic
             log.warn("Failed to record HTTP client metric: {}", e.getMessage());
         }
+    }
+
+    private Tags buildLowCardinalityTags(HttpClientObserverEvent event) {
+        String uri = config.isIncludeUrlPath() && event.getUriPath() != null
+                ? event.getUriPath()
+                : "NONE";
+        return Tags.of(
+                Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
+                Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
+                Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
+                Tag.of("uri", uri)
+        );
     }
 
     private Tags buildTags(HttpClientObserverEvent event) {

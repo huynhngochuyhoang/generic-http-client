@@ -4,8 +4,11 @@ import io.github.huynhngochuyhoang.httpstarter.core.SensitiveHeaders;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -493,6 +496,7 @@ public class ReactiveHttpClientProperties {
         private boolean logResponseBody = false;
 
         private HealthConfig health = new HealthConfig();
+        private HistogramConfig histogram = new HistogramConfig();
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -512,6 +516,52 @@ public class ReactiveHttpClientProperties {
         public HealthConfig getHealth() { return health; }
         public void setHealth(HealthConfig health) {
             this.health = health != null ? health : new HealthConfig();
+        }
+
+        public HistogramConfig getHistogram() { return histogram; }
+        public void setHistogram(HistogramConfig histogram) {
+            this.histogram = histogram != null ? histogram : new HistogramConfig();
+        }
+    }
+
+    /**
+     * Settings for latency histogram metrics.
+     *
+     * <p>When enabled, a separate {@code <metricName>.latency} timer with SLO histogram
+     * buckets is recorded alongside the main timer. The histogram uses only low-cardinality
+     * tags ({@code client.name}, {@code api.name}, {@code http.method}, {@code uri}) to
+     * avoid Prometheus time-series explosion.
+     *
+     * <p>Example {@code application.yml}:
+     * <pre>{@code
+     * reactive:
+     *   http:
+     *     observability:
+     *       histogram:
+     *         enabled: true
+     *         slo-boundaries-ms: [50, 100, 200, 500, 1000, 2000, 5000]
+     * }</pre>
+     */
+    public static class HistogramConfig {
+
+        /** Enable latency histogram (SLO buckets) on the latency metric. Default: {@code false}. */
+        private boolean enabled = false;
+
+        /**
+         * SLO bucket boundaries in milliseconds. Each value produces a
+         * {@code le="<value>"} histogram bucket. Defaults to
+         * {@code [50, 100, 200, 500, 1000, 2000, 5000]} if not configured.
+         */
+        private List<Long> sloBoundariesMs = new ArrayList<>(
+                Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L));
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+        public List<Long> getSloBoundariesMs() { return sloBoundariesMs; }
+        public void setSloBoundariesMs(List<Long> sloBoundariesMs) {
+            this.sloBoundariesMs = sloBoundariesMs != null ? sloBoundariesMs
+                    : new ArrayList<>(Arrays.asList(50L, 100L, 200L, 500L, 1000L, 2000L, 5000L));
         }
     }
 
