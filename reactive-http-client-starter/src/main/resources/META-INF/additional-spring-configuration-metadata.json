@@ -465,9 +465,9 @@
     {
       "name": "reactive.http.observability.metric-name",
       "type": "java.lang.String",
-      "description": "Micrometer timer/counter name for outbound HTTP client requests. Default: http.client.requests.",
+      "description": "Micrometer timer/counter name for outbound HTTP client requests. Default: reactive.http.client.requests.",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ObservabilityConfig",
-      "defaultValue": "http.client.requests"
+      "defaultValue": "reactive.http.client.requests"
     },
     {
       "name": "reactive.http.observability.include-url-path",

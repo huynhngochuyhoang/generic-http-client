@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.1] – 2026-05-06
+
+### Fixed
+
+- **Default `metric-name` changed to `reactive.http.client.requests`.** The previous
+  default `http.client.requests` collides with the Spring Boot built-in HTTP client
+  timer of the same name, causing metric double-counting and tag conflicts in
+  `MicrometerHttpClientObserver`. The new default `reactive.http.client.requests`
+  avoids this collision. Users who rely on the old default can restore it explicitly:
+  ```yaml
+  reactive:
+    http:
+      observability:
+        metric-name: http.client.requests
+  ```
+
+---
+
 ## [1.11.0] – 2026-05-03
 
 ### Added

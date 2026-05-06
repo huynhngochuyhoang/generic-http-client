@@ -128,7 +128,7 @@ reactive:
           timeout-ms: 0
     observability:
       enabled: true
-      metric-name: http.client.requests
+      metric-name: reactive.http.client.requests
       include-url-path: true
       log-request-body: false
       log-response-body: false

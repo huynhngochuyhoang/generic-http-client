@@ -148,7 +148,7 @@ public class ReactiveHttpClientAutoConfiguration {
     /**
      * Registers {@link HttpClientHealthIndicator} when {@code spring-boot-actuator}
      * is on the classpath and a {@link MeterRegistry} bean is available. The
-     * indicator reads the existing {@code http.client.requests} timer meters, so
+     * indicator reads the existing {@code reactive.http.client.requests} timer meters, so
      * no additional observation path is required and the user-override contract
      * on {@link HttpClientObserver} is preserved.
      */

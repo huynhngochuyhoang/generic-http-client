@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * {@link HealthIndicator} that reports on the reactive HTTP client's recent
  * outbound error rate, computed from probe-to-probe deltas on the
- * {@code http.client.requests} timer meters published by
+ * {@code reactive.http.client.requests} timer meters published by
  * {@link MicrometerHttpClientObserver}.
  *
  * <p>On each {@link #health()} call, the indicator snapshots every matching timer,
