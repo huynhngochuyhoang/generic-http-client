@@ -4,9 +4,12 @@ import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperti
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,23 +20,28 @@ import java.util.concurrent.TimeUnit;
  * <table border="1">
  *   <tr><th>Metric</th><th>Type</th><th>Tags</th></tr>
  *   <tr>
- *     <td>{@code reactive.http.client.requests} (configurable)</td>
+ *     <td>{@code <metricName>} (default: {@code reactive.http.client.requests})</td>
  *     <td>Timer (also exposes count + sum)</td>
  *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.attempts}</td>
+ *     <td>{@code <metricName>.attempts}</td>
  *     <td>DistributionSummary (subscription attempts per invocation)</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.request.size}</td>
+ *     <td>{@code <metricName>.request.size}</td>
  *     <td>DistributionSummary (request body bytes; only recorded when measurable — byte[]/String/null bodies)</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  *   <tr>
- *     <td>{@code http.client.requests.response.size}</td>
+ *     <td>{@code <metricName>.response.size}</td>
  *     <td>DistributionSummary (response body bytes from {@code Content-Length}; skipped for chunked responses)</td>
+ *     <td>client.name, api.name, http.method, uri</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@code <metricName>.latency} (when histogram enabled)</td>
+ *     <td>Timer with SLO histogram buckets</td>
  *     <td>client.name, api.name, http.method, uri</td>
  *   </tr>
  * </table>
@@ -74,11 +82,29 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
 
     private final MeterRegistry meterRegistry;
     private final ReactiveHttpClientProperties.ObservabilityConfig config;
+    /** Pre-computed SLO boundaries for the latency histogram; {@code null} when histogram is disabled. */
+    private final Duration[] sloBoundaries;
+    /** Cache of histogram Timer instances keyed by low-cardinality tag set to avoid repeated builder allocation. */
+    private final ConcurrentHashMap<Tags, Timer> histogramTimerCache = new ConcurrentHashMap<>();
 
     public MicrometerHttpClientObserver(MeterRegistry meterRegistry,
                                         ReactiveHttpClientProperties.ObservabilityConfig config) {
         this.meterRegistry = meterRegistry;
         this.config = config;
+        this.sloBoundaries = resolveSloBoundaries(config);
+    }
+
+    private static Duration[] resolveSloBoundaries(ReactiveHttpClientProperties.ObservabilityConfig config) {
+        if (!config.getHistogram().isEnabled()) {
+            return null;
+        }
+        Duration[] boundaries = config.getHistogram().getSloBoundariesMs().stream()
+                .filter(ms -> ms != null && ms > 0)
+                .distinct()
+                .sorted()
+                .map(Duration::ofMillis)
+                .toArray(Duration[]::new);
+        return boundaries.length > 0 ? boundaries : null;
     }
 
     @Override
@@ -93,22 +119,26 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             meterRegistry.timer(config.getMetricName(), tags)
                     .record(event.getDurationMs(), TimeUnit.MILLISECONDS);
 
-            Tags attemptTags = Tags.of(
-                    Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
-                    Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
-                    Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
-                    Tag.of("uri", config.isIncludeUrlPath() && event.getUriPath() != null ? event.getUriPath() : "NONE")
-            );
-            meterRegistry.summary(config.getMetricName() + ".attempts", attemptTags)
+            Tags lowCardinalityTags = buildLowCardinalityTags(event);
+            meterRegistry.summary(config.getMetricName() + ".attempts", lowCardinalityTags)
                     .record(event.getAttemptCount());
 
             if (event.getRequestBytes() >= 0) {
-                meterRegistry.summary(config.getMetricName() + ".request.size", attemptTags)
+                meterRegistry.summary(config.getMetricName() + ".request.size", lowCardinalityTags)
                         .record(event.getRequestBytes());
             }
             if (event.getResponseBytes() >= 0) {
-                meterRegistry.summary(config.getMetricName() + ".response.size", attemptTags)
+                meterRegistry.summary(config.getMetricName() + ".response.size", lowCardinalityTags)
                         .record(event.getResponseBytes());
+            }
+
+            if (sloBoundaries != null) {
+                histogramTimerCache.computeIfAbsent(lowCardinalityTags, t ->
+                        Timer.builder(config.getMetricName() + ".latency")
+                                .tags(t)
+                                .serviceLevelObjectives(sloBoundaries)
+                                .register(meterRegistry)
+                ).record(event.getDurationMs(), TimeUnit.MILLISECONDS);
             }
 
             if (log.isDebugEnabled()) {
@@ -123,6 +153,18 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
             // Never let observability failures propagate to business logic
             log.warn("Failed to record HTTP client metric: {}", e.getMessage());
         }
+    }
+
+    private Tags buildLowCardinalityTags(HttpClientObserverEvent event) {
+        String uri = config.isIncludeUrlPath() && event.getUriPath() != null
+                ? event.getUriPath()
+                : "NONE";
+        return Tags.of(
+                Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
+                Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
+                Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
+                Tag.of("uri", uri)
+        );
     }
 
     private Tags buildTags(HttpClientObserverEvent event) {

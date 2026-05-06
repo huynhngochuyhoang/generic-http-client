@@ -41,6 +41,19 @@ Response body bytes as advertised by `Content-Length`. Chunked responses and tho
 
 Tags: `client.name`, `api.name`, `http.method`, `uri`.
 
+### `reactive.http.client.requests.latency` (Timer with SLO histogram) *(opt-in)*
+
+A separate latency Timer configured with `serviceLevelObjectives(...)` buckets, enabling P99/SLO-style analysis in Prometheus/Grafana without tag-cardinality explosion.  Disabled by default — enable via configuration.
+
+| Tag | Values |
+|---|---|
+| `client.name` | Logical client name from `@ReactiveHttpClient(name)` |
+| `api.name` | `@ApiName` value, or the Java method name |
+| `http.method` | `GET`, `POST`, … |
+| `uri` | Path template (e.g. `/users/{id}`), or `NONE` |
+
+> The histogram deliberately omits `http.status_code`, `outcome`, `exception`, and `error.category` to keep label-set cardinality low and avoid Prometheus time-series explosion.
+
 ---
 
 ## Observability configuration
@@ -54,6 +67,9 @@ reactive:
       include-url-path: true              # set false for high-cardinality paths
       log-request-body: false             # include body in span events (PII risk)
       log-response-body: false
+      histogram:
+        enabled: false                    # opt-in latency histogram (SLO buckets)
+        slo-boundaries-ms: [50, 100, 200, 500, 1000, 2000, 5000]
 ```
 
 > **Production recommendation:** enable body logging only when truly required, and always apply PII masking before the data leaves your network boundary.

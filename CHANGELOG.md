@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.12.0] – 2026-05-06
+
+### Added
+
+- **Opt-in latency histogram with SLO buckets.** `MicrometerHttpClientObserver` now
+  records a second Timer — `<metricName>.latency` (default:
+  `reactive.http.client.requests.latency`) — configured with
+  `serviceLevelObjectives(...)` boundaries. This enables P99/SLO-style latency
+  analysis without tag-cardinality explosion. The histogram is disabled by default and
+  uses only low-cardinality tags (`client.name`, `api.name`, `http.method`, `uri`).
+  Enable it with:
+  ```yaml
+  reactive:
+    http:
+      observability:
+        histogram:
+          enabled: true
+          slo-boundaries-ms: [50, 100, 200, 500, 1000, 2000, 5000]
+  ```
+  The `slo-boundaries-ms` list is validated at startup: null and non-positive values
+  are silently ignored; if the resulting list is empty the histogram is treated as
+  disabled. See [docs/08-observability.md](docs/08-observability.md) for the full
+  reference.
+- **`HistogramConfig` configuration group.** Two new `reactive.http.observability.histogram.*`
+  properties with Spring Boot IDE auto-completion metadata:
+  - `histogram.enabled` (default `false`) — opt-in toggle.
+  - `histogram.slo-boundaries-ms` (default `[50, 100, 200, 500, 1000, 2000, 5000]`) —
+    SLO bucket boundaries in milliseconds.
+- **Histogram Timer caching.** Timer instances are cached per low-cardinality tag
+  combination in a `ConcurrentHashMap`, avoiding repeated `Timer.Builder` allocation
+  on the hot request path.
+
+---
+
 ## [1.11.1] – 2026-05-06
 
 ### Fixed

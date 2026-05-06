@@ -47,6 +47,12 @@
       "sourceMethod": "getHealth()"
     },
     {
+      "name": "reactive.http.observability.histogram",
+      "type": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$HistogramConfig",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ObservabilityConfig",
+      "sourceMethod": "getHistogram()"
+    },
+    {
       "name": "reactive.http.correlation-id",
       "type": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$CorrelationIdConfig",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties",
@@ -510,6 +516,20 @@
       "description": "Minimum probe-interval sample count required before evaluating a client's health. Avoids noisy DOWN status from isolated errors. Default: 10.",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$HealthConfig",
       "defaultValue": 10
+    },
+    {
+      "name": "reactive.http.observability.histogram.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable latency histogram (SLO buckets) recorded as <metricName>.latency (default: reactive.http.client.requests.latency). Default: false.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$HistogramConfig",
+      "defaultValue": false
+    },
+    {
+      "name": "reactive.http.observability.histogram.slo-boundaries-ms",
+      "type": "java.util.List<java.lang.Long>",
+      "description": "SLO bucket boundaries in milliseconds for the latency histogram. Default: [50, 100, 200, 500, 1000, 2000, 5000].",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$HistogramConfig",
+      "defaultValue": [50, 100, 200, 500, 1000, 2000, 5000]
     },
     {
       "name": "reactive.http.correlation-id.max-length",
