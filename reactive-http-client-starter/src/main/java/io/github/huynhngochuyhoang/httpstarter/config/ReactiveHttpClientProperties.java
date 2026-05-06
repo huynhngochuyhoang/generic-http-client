@@ -467,7 +467,7 @@ public class ReactiveHttpClientProperties {
      *   http:
      *     observability:
      *       enabled: true
-     *       metric-name: http.client.requests
+     *       metric-name: reactive.http.client.requests
      *       include-url-path: true
      *       log-request-body: false
      * }</pre>
@@ -477,8 +477,8 @@ public class ReactiveHttpClientProperties {
         /** Master switch – set to {@code false} to disable all metrics/tracing. */
         private boolean enabled = true;
 
-        /** Micrometer timer/counter name (default: {@code http.client.requests}). */
-        private String metricName = "http.client.requests";
+        /** Micrometer timer/counter name (default: {@code reactive.http.client.requests}). */
+        private String metricName = "reactive.http.client.requests";
 
         /**
          * Include the raw URL path as a tag.
@@ -520,7 +520,7 @@ public class ReactiveHttpClientProperties {
      * {@link io.github.huynhngochuyhoang.httpstarter.observability.HttpClientHealthIndicator}.
      *
      * <p>The indicator computes a per-client error ratio from probe-to-probe deltas
-     * on the {@code http.client.requests} timer meters. A client reports DOWN when
+     * on the {@code reactive.http.client.requests} timer meters. A client reports DOWN when
      * its delta sample count meets {@link #getMinSamples()} and its error ratio
      * exceeds {@link #getErrorRateThreshold()}; otherwise UP. The overall status is
      * DOWN if any tracked client is DOWN.

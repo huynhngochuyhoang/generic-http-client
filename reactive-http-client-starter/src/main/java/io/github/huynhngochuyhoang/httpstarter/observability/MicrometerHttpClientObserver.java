@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  * <table border="1">
  *   <tr><th>Metric</th><th>Type</th><th>Tags</th></tr>
  *   <tr>
- *     <td>{@code http.client.requests} (configurable)</td>
+ *     <td>{@code reactive.http.client.requests} (configurable)</td>
  *     <td>Timer (also exposes count + sum)</td>
  *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category</td>
  *   </tr>

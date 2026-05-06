@@ -8,7 +8,7 @@ The starter ships two observability back-ends that are mutually exclusive: Micro
 
 When a `MeterRegistry` bean is present, `MicrometerHttpClientObserver` records four meters per exchange.
 
-### `http.client.requests` (Timer)
+### `reactive.http.client.requests` (Timer)
 
 End-to-end duration from first attempt to final completion (after all retries).
 
@@ -23,19 +23,19 @@ End-to-end duration from first attempt to final completion (after all retries).
 | `error.category` | `ErrorCategory` value — see [03-error-handling.md](03-error-handling.md) |
 | `uri` | Path template (e.g. `/users/{id}`), or `NONE`; disable with `include-url-path: false` |
 
-### `http.client.requests.attempts` (DistributionSummary)
+### `reactive.http.client.requests.attempts` (DistributionSummary)
 
 Number of subscription attempts per invocation. `1` = succeeded on first try; `>1` = Resilience4j retry fired. A p95 above `1` signals degradation in a downstream service.
 
 Tags: `client.name`, `api.name`, `http.method`, `uri`.
 
-### `http.client.requests.request.size` (DistributionSummary)
+### `reactive.http.client.requests.request.size` (DistributionSummary)
 
 Serialized request body bytes. Recorded only for cheaply measurable types: `byte[]`, `String`, or `null` (`0`). POJO bodies are not measured to avoid double-serialization cost.
 
 Tags: `client.name`, `api.name`, `http.method`, `uri`.
 
-### `http.client.requests.response.size` (DistributionSummary)
+### `reactive.http.client.requests.response.size` (DistributionSummary)
 
 Response body bytes as advertised by `Content-Length`. Chunked responses and those without the header are skipped.
 
@@ -50,7 +50,7 @@ reactive:
   http:
     observability:
       enabled: true
-      metric-name: http.client.requests   # custom timer/counter name
+      metric-name: reactive.http.client.requests   # custom timer/counter name
       include-url-path: true              # set false for high-cardinality paths
       log-request-body: false             # include body in span events (PII risk)
       log-response-body: false
@@ -62,7 +62,7 @@ reactive:
 
 ## Actuator health indicator
 
-When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `http.client.requests` timer and reports per-client error rates computed from probe-to-probe deltas.
+When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `reactive.http.client.requests` timer and reports per-client error rates computed from probe-to-probe deltas.
 
 ```yaml
 reactive:

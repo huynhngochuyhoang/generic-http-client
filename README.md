@@ -535,7 +535,7 @@ Per-method annotations are still gated on the client having `resilience.enabled 
 
 When a `MeterRegistry` is present, the starter records four metrics per exchange:
 
-**`http.client.requests`** (Timer) — duration from first attempt to final completion:
+**`reactive.http.client.requests`** (Timer) — duration from first attempt to final completion:
 
 | Tag | Values |
 |---|---|
@@ -548,11 +548,11 @@ When a `MeterRegistry` is present, the starter records four metrics per exchange
 | `error.category` | `RATE_LIMITED`, `CLIENT_ERROR`, `SERVER_ERROR`, `TIMEOUT`, `CANCELLED`, `AUTH_PROVIDER_ERROR`, `RESPONSE_DECODE_ERROR`, `UNKNOWN`, `none` |
 | `uri` | path template or `NONE` (disable via `include-url-path: false`) |
 
-**`http.client.requests.attempts`** (DistributionSummary) — number of subscription attempts per invocation (1 = succeeded on first try; >1 = Resilience4j retry fired). Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 is a signal that a downstream service is degraded.
+**`reactive.http.client.requests.attempts`** (DistributionSummary) — number of subscription attempts per invocation (1 = succeeded on first try; >1 = Resilience4j retry fired). Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 is a signal that a downstream service is degraded.
 
-**`http.client.requests.request.size`** (DistributionSummary) — serialised request body bytes. Recorded only when the body is measurable cheaply: `byte[]` (length), `String` / `CharSequence` (UTF-8 byte length), or `null` (`0`). Arbitrary objects (POJOs serialised by the codec) are **not** measured to avoid double-serialisation cost. Tags: `client.name`, `api.name`, `http.method`, `uri`.
+**`reactive.http.client.requests.request.size`** (DistributionSummary) — serialised request body bytes. Recorded only when the body is measurable cheaply: `byte[]` (length), `String` / `CharSequence` (UTF-8 byte length), or `null` (`0`). Arbitrary objects (POJOs serialised by the codec) are **not** measured to avoid double-serialisation cost. Tags: `client.name`, `api.name`, `http.method`, `uri`.
 
-**`http.client.requests.response.size`** (DistributionSummary) — response body bytes as advertised by the server via `Content-Length`. Chunked responses and responses without the header are skipped. Tags: `client.name`, `api.name`, `http.method`, `uri`.
+**`reactive.http.client.requests.response.size`** (DistributionSummary) — response body bytes as advertised by the server via `Content-Length`. Chunked responses and responses without the header are skipped. Tags: `client.name`, `api.name`, `http.method`, `uri`.
 
 ### Connection-pool metrics (Reactor Netty)
 
@@ -567,7 +567,7 @@ All gauges are tagged with the pool name (`reactive-http-client-<clientName>`). 
 
 ### Actuator health indicator
 
-When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `http.client.requests` timer meters and reports per-client error rates computed from probe-to-probe deltas — i.e. the window size is the interval between actuator health probes. No additional observation path is required (the indicator does not implement `HttpClientObserver`, so the `@ConditionalOnMissingBean(HttpClientObserver.class)` override contract still stands).
+When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `reactive.http.client.requests` timer meters and reports per-client error rates computed from probe-to-probe deltas — i.e. the window size is the interval between actuator health probes. No additional observation path is required (the indicator does not implement `HttpClientObserver`, so the `@ConditionalOnMissingBean(HttpClientObserver.class)` override contract still stands).
 
 ```yaml
 reactive:
@@ -659,7 +659,7 @@ reactive:
   http:
     observability:
       enabled: true
-      metric-name: http.client.requests
+      metric-name: reactive.http.client.requests
       include-url-path: true
       log-request-body: false
       log-response-body: false

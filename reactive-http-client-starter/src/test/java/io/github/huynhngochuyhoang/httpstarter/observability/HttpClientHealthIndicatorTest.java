@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Tests for {@link HttpClientHealthIndicator}. Uses a {@link SimpleMeterRegistry}
  * plus the real {@link MicrometerHttpClientObserver} to seed realistic
- * {@code http.client.requests} meters, then probes {@code health()} and asserts
+ * {@code reactive.http.client.requests} meters, then probes {@code health()} and asserts
  * on the probe-to-probe delta semantics.
  */
 class HttpClientHealthIndicatorTest {

@@ -34,7 +34,7 @@ class MicrometerHttpClientObserverTest {
                 null
         ));
 
-        Timer timer = meterRegistry.find("http.client.requests")
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("error.category", "RATE_LIMITED")
                 .timer();
         assertNotNull(timer);
@@ -62,7 +62,7 @@ class MicrometerHttpClientObserverTest {
                 "ok"
         ));
 
-        Timer timer = meterRegistry.find("http.client.requests")
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("error.category", "none")
                 .timer();
         assertNotNull(timer);
@@ -90,7 +90,7 @@ class MicrometerHttpClientObserverTest {
                 null
         ));
 
-        Timer timer = meterRegistry.find("http.client.requests")
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("http.status_code", "NONE")
                 .timer();
         assertNotNull(timer);
@@ -118,7 +118,7 @@ class MicrometerHttpClientObserverTest {
                 "ok"
         ));
 
-        Timer timer = meterRegistry.find("http.client.requests")
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("client.name", "UNKNOWN")
                 .timer();
         assertNotNull(timer);
@@ -139,10 +139,10 @@ class MicrometerHttpClientObserverTest {
                 1, 128L, 256L
         ));
 
-        DistributionSummary requestSize = meterRegistry.find("http.client.requests.request.size")
+        DistributionSummary requestSize = meterRegistry.find("reactive.http.client.requests.request.size")
                 .tag("client.name", "user-service")
                 .summary();
-        DistributionSummary responseSize = meterRegistry.find("http.client.requests.response.size")
+        DistributionSummary responseSize = meterRegistry.find("reactive.http.client.requests.response.size")
                 .tag("client.name", "user-service")
                 .summary();
 
@@ -169,9 +169,9 @@ class MicrometerHttpClientObserverTest {
                 1, HttpClientObserverEvent.UNKNOWN_SIZE, HttpClientObserverEvent.UNKNOWN_SIZE
         ));
 
-        assertNull(meterRegistry.find("http.client.requests.request.size").summary(),
+        assertNull(meterRegistry.find("reactive.http.client.requests.request.size").summary(),
                 "unknown request size must not create a distribution summary meter");
-        assertNull(meterRegistry.find("http.client.requests.response.size").summary(),
+        assertNull(meterRegistry.find("reactive.http.client.requests.response.size").summary(),
                 "unknown response size must not create a distribution summary meter");
     }
 
@@ -189,8 +189,8 @@ class MicrometerHttpClientObserverTest {
                 1, 0L, 0L
         ));
 
-        DistributionSummary requestSize = meterRegistry.find("http.client.requests.request.size").summary();
-        DistributionSummary responseSize = meterRegistry.find("http.client.requests.response.size").summary();
+        DistributionSummary requestSize = meterRegistry.find("reactive.http.client.requests.request.size").summary();
+        DistributionSummary responseSize = meterRegistry.find("reactive.http.client.requests.response.size").summary();
 
         assertNotNull(requestSize);
         assertEquals(1, requestSize.count(),
