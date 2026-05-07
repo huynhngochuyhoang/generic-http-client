@@ -17,9 +17,11 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -162,6 +164,48 @@ class HousekeepingTest {
                 "resolvedExchangeLogger must remain the same object on subsequent invocations");
     }
 
+    @Test
+    void interfaceLevelLogHttpExchangeUsesActualProxyInterfaceAndDoesNotLeakAcrossClients() throws Throwable {
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(req -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                        .body("ok")
+                        .build()))
+                .build();
+
+        MethodMetadataCache sharedCache = new MethodMetadataCache();
+        Method inheritedMethod = SharedBaseApi.class.getMethod("call");
+        MethodMetadata meta = sharedCache.get(inheritedMethod);
+        assertNull(meta.getResolvedExchangeLogger(), "method metadata starts with empty per-method cache");
+
+        CountingInheritedClientLogger.LOG_COUNT.set(0);
+
+        ReactiveClientInvocationHandler loggedHandler = buildHandlerWithCache(webClient, sharedCache);
+        Object loggedProxy = Proxy.newProxyInstance(
+                InheritedLoggedClient.class.getClassLoader(),
+                new Class[]{InheritedLoggedClient.class},
+                (proxy, method, args) -> null);
+        StepVerifier.create((Mono<?>) loggedHandler.invoke(loggedProxy, inheritedMethod, new Object[0]))
+                .expectNextCount(1)
+                .verifyComplete();
+        assertEquals(1, CountingInheritedClientLogger.LOG_COUNT.get(),
+                "logger should be used when extending client interface is annotated");
+
+        ReactiveClientInvocationHandler unloggedHandler = buildHandlerWithCache(webClient, sharedCache);
+        Object unloggedProxy = Proxy.newProxyInstance(
+                InheritedPlainClient.class.getClassLoader(),
+                new Class[]{InheritedPlainClient.class},
+                (proxy, method, args) -> null);
+        StepVerifier.create((Mono<?>) unloggedHandler.invoke(unloggedProxy, inheritedMethod, new Object[0]))
+                .expectNextCount(1)
+                .verifyComplete();
+        assertEquals(1, CountingInheritedClientLogger.LOG_COUNT.get(),
+                "logger usage from one client must not leak to another client sharing the same base method");
+        assertNull(meta.getResolvedExchangeLogger(),
+                "interface-level logger should not be stored on shared MethodMetadata");
+    }
+
     // -------------------------------------------------------------------------
     // 2.9 – Bounded cause-chain traversal (max depth 16)
     // -------------------------------------------------------------------------
@@ -263,6 +307,9 @@ class HousekeepingTest {
         ObjectProvider<DefaultHttpExchangeLogger> loggerProvider = mock(ObjectProvider.class);
         when(loggerProvider.getIfAvailable()).thenReturn(new DefaultHttpExchangeLogger());
         when(ctx.getBeanProvider(DefaultHttpExchangeLogger.class)).thenReturn(loggerProvider);
+        ObjectProvider<CountingInheritedClientLogger> inheritedLoggerProvider = mock(ObjectProvider.class);
+        when(inheritedLoggerProvider.getIfAvailable()).thenReturn(null);
+        when(ctx.getBeanProvider(CountingInheritedClientLogger.class)).thenReturn(inheritedLoggerProvider);
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
         return new ReactiveClientInvocationHandler(
                 webClient, cache, new RequestArgumentResolver(),
@@ -308,5 +355,24 @@ class HousekeepingTest {
         @GET("/items")
         @LogHttpExchange(logger = DefaultHttpExchangeLogger.class)
         Mono<String> call();
+    }
+
+    interface SharedBaseApi {
+        @GET("/items")
+        Mono<String> call();
+    }
+
+    @LogHttpExchange(logger = CountingInheritedClientLogger.class)
+    interface InheritedLoggedClient extends SharedBaseApi { }
+
+    interface InheritedPlainClient extends SharedBaseApi { }
+
+    public static class CountingInheritedClientLogger implements HttpExchangeLogger {
+        static final AtomicInteger LOG_COUNT = new AtomicInteger();
+
+        @Override
+        public void log(HttpExchangeLogContext context) {
+            LOG_COUNT.incrementAndGet();
+        }
     }
 }

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.12.1] – 2026-05-07
+
+### Fixed
+
+- **Client-level `@LogHttpExchange` correctness for inherited interfaces.** Interface-level logger
+  resolution now uses the actual reactive client proxy interface at invocation time, so methods
+  inherited from base interfaces correctly pick up `@LogHttpExchange` declared on the extending
+  client interface.
+- **No cross-client logger leakage for shared methods.** Interface-level logger resolution is no
+  longer cached on shared `MethodMetadata`, preventing annotation leakage when multiple clients
+  share the same inherited base method signature.
+
+---
+
 ## [1.12.0] – 2026-05-06
 
 ### Added

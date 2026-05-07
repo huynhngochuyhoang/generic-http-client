@@ -10,7 +10,7 @@ Annotate the client interface to apply one logger to all methods:
 
 ```java
 @ReactiveHttpClient(name = "user-service")
-@LogHttpExchange(logger = MyOrderLogger.class)
+@LogHttpExchange(logger = UserApiExchangeLogger.class)
 public interface UserApiClient {
 
     @GET("/users/{id}")

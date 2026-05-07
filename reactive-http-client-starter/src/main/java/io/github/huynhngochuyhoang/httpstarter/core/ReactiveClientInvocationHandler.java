@@ -1,6 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.huynhngochuyhoang.httpstarter.annotation.FormFile;
+import io.github.huynhngochuyhoang.httpstarter.annotation.LogHttpExchange;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthRequest;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
@@ -164,7 +165,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         AtomicLong start = new AtomicLong();
         AtomicBoolean firstAttempt = new AtomicBoolean(true);
         AtomicInteger attemptCount = new AtomicInteger(0);
-        HttpExchangeLogger exchangeLogger = resolveExchangeLogger(meta);
+        HttpExchangeLogger exchangeLogger = resolveExchangeLogger(proxy, method, meta);
 
         WebClient.RequestBodySpec requestSpec = webClient
                 .method(HttpMethod.valueOf(meta.getHttpMethod()))
@@ -601,40 +602,57 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
     }
 
-    private HttpExchangeLogger resolveExchangeLogger(MethodMetadata meta) {
-        // Fast path: already resolved for this method on a previous invocation.
-        HttpExchangeLogger perMethodCached = meta.getResolvedExchangeLogger();
-        if (perMethodCached != null) {
-            return perMethodCached != MethodMetadata.noopExchangeLogger() ? perMethodCached : null;
+    private HttpExchangeLogger resolveExchangeLogger(Object proxy, Method method, MethodMetadata meta) {
+        // Method-level annotation remains the highest precedence and can be safely
+        // cached on MethodMetadata because it's tied to the Method itself.
+        if (meta.isHttpExchangeLoggingEnabled() && meta.getHttpExchangeLoggerClass() != null) {
+            HttpExchangeLogger perMethodCached = meta.getResolvedExchangeLogger();
+            if (perMethodCached != null) {
+                return perMethodCached != MethodMetadata.noopExchangeLogger() ? perMethodCached : null;
+            }
+            HttpExchangeLogger resolved = getOrCreateExchangeLogger(meta.getHttpExchangeLoggerClass());
+            meta.setResolvedExchangeLogger(resolved != null ? resolved : MethodMetadata.noopExchangeLogger());
+            return resolved;
         }
 
-        // Slow path: first resolution for this method.
-        HttpExchangeLogger resolved;
-        if (!meta.isHttpExchangeLoggingEnabled() || meta.getHttpExchangeLoggerClass() == null) {
-            resolved = null;
-        } else {
-            Class<? extends HttpExchangeLogger> loggerClass = meta.getHttpExchangeLoggerClass();
-            HttpExchangeLogger cached = loggerCache.get(loggerClass);
-            if (cached != null) {
-                resolved = cached;
-            } else {
-                HttpExchangeLogger created = instantiateExchangeLogger(loggerClass);
-                if (loggerCache.size() >= MAX_LOGGER_CACHE_SIZE) {
-                    if (loggerCacheLimitWarningLogged.compareAndSet(false, true)) {
-                        log.warn("HttpExchangeLogger cache reached configured limit ({}). New logger classes will not be cached.",
-                                MAX_LOGGER_CACHE_SIZE);
+        LogHttpExchange interfaceLevelAnnotation = resolveInterfaceLevelLogAnnotation(proxy, method);
+        if (interfaceLevelAnnotation == null) {
+            return null;
+        }
+        return getOrCreateExchangeLogger(interfaceLevelAnnotation.logger());
+    }
+
+    private LogHttpExchange resolveInterfaceLevelLogAnnotation(Object proxy, Method method) {
+        if (proxy != null) {
+            Class<?> declaringInterface = method.getDeclaringClass();
+            for (Class<?> candidate : proxy.getClass().getInterfaces()) {
+                if (declaringInterface.isAssignableFrom(candidate)) {
+                    LogHttpExchange annotation = candidate.getAnnotation(LogHttpExchange.class);
+                    if (annotation != null) {
+                        return annotation;
                     }
-                    resolved = created;
-                } else {
-                    HttpExchangeLogger existing = loggerCache.putIfAbsent(loggerClass, created);
-                    resolved = existing != null ? existing : created;
                 }
             }
         }
+        // Fallback for direct handler unit tests where `proxy` is intentionally null.
+        return method.getDeclaringClass().getAnnotation(LogHttpExchange.class);
+    }
 
-        // Store on the method metadata so subsequent invocations skip the slow path.
-        meta.setResolvedExchangeLogger(resolved != null ? resolved : MethodMetadata.noopExchangeLogger());
-        return resolved;
+    private HttpExchangeLogger getOrCreateExchangeLogger(Class<? extends HttpExchangeLogger> loggerClass) {
+        HttpExchangeLogger cached = loggerCache.get(loggerClass);
+        if (cached != null) {
+            return cached;
+        }
+        HttpExchangeLogger created = instantiateExchangeLogger(loggerClass);
+        if (loggerCache.size() >= MAX_LOGGER_CACHE_SIZE) {
+            if (loggerCacheLimitWarningLogged.compareAndSet(false, true)) {
+                log.warn("HttpExchangeLogger cache reached configured limit ({}). New logger classes will not be cached.",
+                        MAX_LOGGER_CACHE_SIZE);
+            }
+            return created;
+        }
+        HttpExchangeLogger existing = loggerCache.putIfAbsent(loggerClass, created);
+        return existing != null ? existing : created;
     }
 
     private HttpExchangeLogger instantiateExchangeLogger(Class<? extends HttpExchangeLogger> loggerClass) {

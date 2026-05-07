@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,21 +43,20 @@ class MethodMetadataValidationTest {
     }
 
     @Test
-    void shouldInheritLogHttpExchangeFromClientInterface() throws Exception {
-        Method method = ClassLevelLoggedClient.class.getMethod("call");
-        MethodMetadata metadata = new MethodMetadataCache().get(method);
-
-        assertTrue(metadata.isHttpExchangeLoggingEnabled());
-        assertEquals(DefaultHttpExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
-    }
-
-    @Test
-    void shouldPreferMethodLevelLogHttpExchangeOverClientLevel() throws Exception {
-        Method method = ClassLevelLoggedClient.class.getMethod("callWithOverride");
+    void shouldParseMethodLevelLogHttpExchange() throws Exception {
+        Method method = MethodLoggedClient.class.getMethod("call");
         MethodMetadata metadata = new MethodMetadataCache().get(method);
 
         assertTrue(metadata.isHttpExchangeLoggingEnabled());
         assertEquals(OverrideTestExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
+    }
+
+    @Test
+    void shouldNotParseClientLevelLogHttpExchangeIntoSharedMethodMetadata() throws Exception {
+        Method method = ClassLevelLoggedClient.class.getMethod("call");
+        MethodMetadata metadata = new MethodMetadataCache().get(method);
+
+        assertFalse(metadata.isHttpExchangeLoggingEnabled());
     }
 
     interface InvalidReturnTypeClient {
@@ -73,10 +73,12 @@ class MethodMetadataValidationTest {
     interface ClassLevelLoggedClient {
         @GET("/items")
         Mono<String> call();
+    }
 
+    interface MethodLoggedClient {
         @GET("/items/override")
         @LogHttpExchange(logger = OverrideTestExchangeLogger.class)
-        Mono<String> callWithOverride();
+        Mono<String> call();
     }
 
     static final class OverrideTestExchangeLogger implements HttpExchangeLogger {
