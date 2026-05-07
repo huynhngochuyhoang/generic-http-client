@@ -56,7 +56,7 @@ class MethodMetadataValidationTest {
         MethodMetadata metadata = new MethodMetadataCache().get(method);
 
         assertTrue(metadata.isHttpExchangeLoggingEnabled());
-        assertEquals(CustomTestExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
+        assertEquals(OverrideTestExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
     }
 
     interface InvalidReturnTypeClient {
@@ -75,11 +75,11 @@ class MethodMetadataValidationTest {
         Mono<String> call();
 
         @GET("/items/override")
-        @LogHttpExchange(logger = CustomTestExchangeLogger.class)
+        @LogHttpExchange(logger = OverrideTestExchangeLogger.class)
         Mono<String> callWithOverride();
     }
 
-    static final class CustomTestExchangeLogger implements HttpExchangeLogger {
+    static final class OverrideTestExchangeLogger implements HttpExchangeLogger {
         @Override
         public void log(HttpExchangeLogContext context) {
             // no-op
