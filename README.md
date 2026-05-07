@@ -452,7 +452,7 @@ Each proxy invocation follows this pipeline:
 | `@Retry("instance")` | Method | Per-method Resilience4j Retry instance — overrides `resilience.retry` |
 | `@CircuitBreaker("instance")` | Method | Per-method Resilience4j CircuitBreaker instance — overrides `resilience.circuit-breaker` |
 | `@Bulkhead("instance")` | Method | Per-method Resilience4j Bulkhead instance — overrides `resilience.bulkhead` |
-| `@LogHttpExchange` | Method | Request/response log hook via `HttpExchangeLogger` |
+| `@LogHttpExchange` | Method / Interface | Request/response log hook via `HttpExchangeLogger` |
 
 ---
 

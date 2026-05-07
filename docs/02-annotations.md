@@ -164,7 +164,7 @@ Marks the method as a `multipart/form-data` request. Combine with `@FormField` a
 
 ### `@LogHttpExchange`
 
-Hooks per-method request/response logging via an `HttpExchangeLogger` bean. See [13-exchange-logging.md](13-exchange-logging.md).
+Hooks request/response logging via an `HttpExchangeLogger` bean at method or client-interface level. Method-level annotation overrides client-level logger. See [13-exchange-logging.md](13-exchange-logging.md).
 
 ---
 

@@ -1,6 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
+import io.github.huynhngochuyhoang.httpstarter.annotation.LogHttpExchange;
 import io.github.huynhngochuyhoang.httpstarter.annotation.PATCH;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -40,6 +41,24 @@ class MethodMetadataValidationTest {
         assertThrows(UnsupportedOperationException.class, () -> metadata.getHeaderMapParams().add(0));
     }
 
+    @Test
+    void shouldInheritLogHttpExchangeFromClientInterface() throws Exception {
+        Method method = ClassLevelLoggedClient.class.getMethod("call");
+        MethodMetadata metadata = new MethodMetadataCache().get(method);
+
+        assertTrue(metadata.isHttpExchangeLoggingEnabled());
+        assertEquals(DefaultHttpExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
+    }
+
+    @Test
+    void shouldPreferMethodLevelLogHttpExchangeOverClientLevel() throws Exception {
+        Method method = ClassLevelLoggedClient.class.getMethod("callWithOverride");
+        MethodMetadata metadata = new MethodMetadataCache().get(method);
+
+        assertTrue(metadata.isHttpExchangeLoggingEnabled());
+        assertEquals(CustomTestExchangeLogger.class, metadata.getHttpExchangeLoggerClass());
+    }
+
     interface InvalidReturnTypeClient {
         @GET("/items")
         String call();
@@ -48,5 +67,22 @@ class MethodMetadataValidationTest {
     interface PatchClient {
         @PATCH("/items/1")
         Mono<String> patch();
+    }
+
+    @LogHttpExchange(logger = DefaultHttpExchangeLogger.class)
+    interface ClassLevelLoggedClient {
+        @GET("/items")
+        Mono<String> call();
+
+        @GET("/items/override")
+        @LogHttpExchange(logger = CustomTestExchangeLogger.class)
+        Mono<String> callWithOverride();
+    }
+
+    static final class CustomTestExchangeLogger implements HttpExchangeLogger {
+        @Override
+        public void log(HttpExchangeLogContext context) {
+            // no-op
+        }
     }
 }

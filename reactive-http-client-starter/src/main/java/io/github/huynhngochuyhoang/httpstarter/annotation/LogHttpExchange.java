@@ -9,13 +9,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Enables request/response logging for a reactive client method.
+ * Enables request/response logging for a reactive client method or interface.
  *
  * <p>By default, {@link DefaultHttpExchangeLogger} is used. Consumers can
  * provide a custom logger implementation to inspect headers, record metrics,
  * or forward events to observability systems.
  */
-@Target(ElementType.METHOD)
+@Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface LogHttpExchange {
 

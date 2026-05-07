@@ -151,8 +151,11 @@ public class MethodMetadataCache {
             }
         }
 
-        if (method.isAnnotationPresent(LogHttpExchange.class)) {
-            LogHttpExchange ann = method.getAnnotation(LogHttpExchange.class);
+        LogHttpExchange ann = method.getAnnotation(LogHttpExchange.class);
+        if (ann == null) {
+            ann = method.getDeclaringClass().getAnnotation(LogHttpExchange.class);
+        }
+        if (ann != null) {
             meta.setHttpExchangeLoggingEnabled(true);
             meta.setHttpExchangeLoggerClass(ann.logger());
         }

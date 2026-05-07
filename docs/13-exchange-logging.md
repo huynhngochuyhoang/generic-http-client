@@ -1,8 +1,30 @@
 # Exchange Logging
 
-The starter provides per-method request/response logging through the `@LogHttpExchange` annotation and the `HttpExchangeLogger` extension point.
+The starter provides request/response logging through the `@LogHttpExchange` annotation and the `HttpExchangeLogger` extension point.
 
 ---
+
+## Enabling logging for an entire client interface
+
+Annotate the client interface to apply one logger to all methods:
+
+```java
+@ReactiveHttpClient(name = "user-service")
+@LogHttpExchange(logger = MyOrderLogger.class)
+public interface UserApiClient {
+
+    @GET("/users/{id}")
+    Mono<User> getUser(@PathVar("id") String id);
+}
+```
+
+Method-level `@LogHttpExchange` overrides the client-level logger:
+
+```java
+@GET("/users/{id}")
+@LogHttpExchange(logger = AuditExchangeLogger.class)
+Mono<User> getUser(@PathVar("id") String id);
+```
 
 ## Enabling logging for a method
 
@@ -90,7 +112,7 @@ Sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization
 
 ## Custom logger
 
-You can supply a custom `HttpExchangeLogger` class (or bean) per method via the `logger` attribute on `@LogHttpExchange`. The runtime first checks the Spring `ApplicationContext` for a bean of the named class; if none is found it instantiates the class directly using its no-arg constructor.
+You can supply a custom `HttpExchangeLogger` class (or bean) via the `logger` attribute on `@LogHttpExchange` at either interface level or method level. The runtime first checks the Spring `ApplicationContext` for a bean of the named class; if none is found it instantiates the class directly using its no-arg constructor.
 
 ```java
 public class AuditExchangeLogger implements HttpExchangeLogger {
