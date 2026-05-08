@@ -206,6 +206,32 @@ class HousekeepingTest {
                 "interface-level logger should not be stored on shared MethodMetadata");
     }
 
+    @Test
+    void methodLevelLogHttpExchangeOverridesInterfaceLevelOnSameClient() throws Throwable {
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(req -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                        .body("ok")
+                        .build()))
+                .build();
+        Method method = InterfaceAndMethodOverrideClient.class.getMethod("call");
+        CountingInheritedClientLogger.LOG_COUNT.set(0);
+
+        ReactiveClientInvocationHandler handler = buildHandlerWithCache(webClient, new MethodMetadataCache());
+        Object proxy = Proxy.newProxyInstance(
+                InterfaceAndMethodOverrideClient.class.getClassLoader(),
+                new Class[]{InterfaceAndMethodOverrideClient.class},
+                (p, m, a) -> null);
+
+        StepVerifier.create((Mono<?>) handler.invoke(proxy, method, new Object[0]))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertEquals(0, CountingInheritedClientLogger.LOG_COUNT.get(),
+                "method-level logger should take precedence over interface-level logger");
+    }
+
     // -------------------------------------------------------------------------
     // 2.9 – Bounded cause-chain traversal (max depth 16)
     // -------------------------------------------------------------------------
@@ -366,6 +392,13 @@ class HousekeepingTest {
     interface InheritedLoggedClient extends SharedBaseApi { }
 
     interface InheritedPlainClient extends SharedBaseApi { }
+
+    @LogHttpExchange(logger = CountingInheritedClientLogger.class)
+    interface InterfaceAndMethodOverrideClient {
+        @GET("/items")
+        @LogHttpExchange(logger = DefaultHttpExchangeLogger.class)
+        Mono<String> call();
+    }
 
     public static class CountingInheritedClientLogger implements HttpExchangeLogger {
         static final AtomicInteger LOG_COUNT = new AtomicInteger();

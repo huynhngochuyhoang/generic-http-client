@@ -634,7 +634,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 }
             }
         }
-        // Fallback for direct handler unit tests where `proxy` is intentionally null.
+        // General fallback to the declaring interface annotation; this also covers
+        // direct handler unit tests where `proxy` is intentionally null.
         return method.getDeclaringClass().getAnnotation(LogHttpExchange.class);
     }
 
