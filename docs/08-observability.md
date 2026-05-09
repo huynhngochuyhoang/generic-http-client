@@ -191,7 +191,14 @@ Errors set `StatusCode.ERROR` and call `recordException(...)` so the exception e
 
 ### Mutual exclusion with Micrometer
 
-`OpenTelemetryHttpClientObserver` registers under `@ConditionalOnMissingBean(HttpClientObserver.class)`, which means pulling in the OTel module disables the Micrometer observer. To run both, register a composite `HttpClientObserver` bean:
+`OpenTelemetryHttpClientObserver` registers under `@ConditionalOnMissingBean(HttpClientObserver.class)`, which means pulling in the OTel module disables the Micrometer observer.
+
+If you want both Micrometer and OTel, explicitly register your own `HttpClientObserver` bean. You can either:
+
+1. Implement `HttpClientObserver` directly (lambda or class), or
+2. Delegate to starter observers (`MicrometerHttpClientObserver` and `OpenTelemetryHttpClientObserver`) if you only need composition without custom logic.
+
+Example composite bean:
 
 ```java
 @Bean
@@ -199,8 +206,8 @@ HttpClientObserver compositeObserver(
         MicrometerHttpClientObserver micrometer,
         OpenTelemetryHttpClientObserver otel) {
     return event -> {
-        micrometer.onExchange(event);
-        otel.onExchange(event);
+        micrometer.record(event);
+        otel.record(event);
     };
 }
 ```
