@@ -196,15 +196,23 @@ Errors set `StatusCode.ERROR` and call `recordException(...)` so the exception e
 If you want both Micrometer and OTel, explicitly register your own `HttpClientObserver` bean. You can either:
 
 1. Implement `HttpClientObserver` directly (lambda or class), or
-2. Delegate to starter observers (`MicrometerHttpClientObserver` and `OpenTelemetryHttpClientObserver`) if you only need composition without custom logic.
+2. Delegate to starter observers if you only need composition without custom logic.
+
+> **Important:** once you define any custom `HttpClientObserver` bean, both starter auto-configurations back off (`@ConditionalOnMissingBean(HttpClientObserver.class)`), so delegate observers are not auto-registered for injection.
 
 Example composite bean:
 
 ```java
 @Bean
 HttpClientObserver compositeObserver(
-        MicrometerHttpClientObserver micrometer,
-        OpenTelemetryHttpClientObserver otel) {
+        MeterRegistry meterRegistry,
+        ReactiveHttpClientProperties properties,
+        ObjectProvider<OpenTelemetry> openTelemetryProvider) {
+    MicrometerHttpClientObserver micrometer =
+            new MicrometerHttpClientObserver(meterRegistry, properties.getObservability());
+    OpenTelemetryHttpClientObserver otel =
+            new OpenTelemetryHttpClientObserver(openTelemetryProvider.getIfAvailable(GlobalOpenTelemetry::get));
+
     return event -> {
         micrometer.record(event);
         otel.record(event);
