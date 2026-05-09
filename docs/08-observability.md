@@ -161,7 +161,7 @@ The optional OTel companion records each outbound exchange as a span using the [
 
 ### Activation
 
-When `opentelemetry-api` is on the classpath and an `OpenTelemetry` bean is present, the auto-configuration registers `OpenTelemetryHttpClientObserver`. Disable without removing the dependency:
+When `opentelemetry-api` is on the classpath, the auto-configuration registers `OpenTelemetryHttpClientObserver`. If an `OpenTelemetry` bean is present it is used; otherwise the observer falls back to `GlobalOpenTelemetry`. Disable without removing the dependency:
 
 ```yaml
 reactive:

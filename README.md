@@ -615,11 +615,12 @@ outbound exchange as an OpenTelemetry span using the standard
 </dependency>
 ```
 
-Activation: when `opentelemetry-api` is on the classpath **and** an
-`OpenTelemetry` bean is available in the context, the auto-configuration
-registers `OpenTelemetryHttpClientObserver` under the property
-`reactive.http.observability.otel.enabled` (default `true`). Set to `false`
-to disable without removing the dependency.
+Activation: when `opentelemetry-api` is on the classpath, the
+auto-configuration registers `OpenTelemetryHttpClientObserver` under the
+property `reactive.http.observability.otel.enabled` (default `true`). If an
+`OpenTelemetry` bean exists it is used; otherwise the observer falls back to
+`GlobalOpenTelemetry`. Set to `false` to disable without removing the
+dependency.
 
 | Span field | Source |
 |---|---|
