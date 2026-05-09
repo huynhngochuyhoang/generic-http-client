@@ -220,6 +220,9 @@ HttpClientObserver compositeObserver(
 }
 ```
 
+In this example, `properties.getObservability()` provides the `reactive.http.observability.*` settings consumed by `MicrometerHttpClientObserver`.
+`GlobalOpenTelemetry::get` mirrors the starter default: use an `OpenTelemetry` bean when available, otherwise fall back to the global SDK.
+
 ---
 
 ## Resilience4j metrics
