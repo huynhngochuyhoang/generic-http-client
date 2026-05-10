@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.0] – 2026-05-10
+
+### Added
+
+- **Optional `@ApiRef` API-map routing.** Client methods can now resolve HTTP method, path,
+  and timeout by logical API name from `reactive.http.clients.<client>.apis.<api-name>`,
+  as an alternative to method-level HTTP verb annotations.
+- **Per-client API map configuration model.** Added
+  `apis.<api-name>.method`, `apis.<api-name>.path`, and optional
+  `apis.<api-name>.timeout-ms` (`-1` unset, `0` disable request timeout).
+
+### Changed
+
+- **Timeout precedence for `@ApiRef` methods.** Effective timeout order is now:
+  method-level `@TimeoutMs` → API-map `timeout-ms` → client `resilience.timeout-ms`.
+- **Clearer API-map error paths.** `@ApiRef` config errors now report map-key paths in
+  bracket notation (for example `reactive.http.clients.<name>.apis[user.getById].path`)
+  to avoid ambiguity with dotted API keys.
+
+### Fixed
+
+- **Spring Boot config metadata source type for API-map fields.** API-map metadata now points
+  to `ReactiveHttpClientProperties.ApiConfig` for accurate property mapping in IDE metadata.
+
+---
+
 ## [1.12.1] – 2026-05-07
 
 ### Fixed
