@@ -32,6 +32,7 @@ public interface LocalApiClient { ... }
 ## HTTP verb annotations
 
 Each annotation accepts a single `value` attribute: the path template.
+If you use `@ApiRef` on a method, do not add HTTP verb annotations to that method.
 
 | Annotation | HTTP method |
 |---|---|
@@ -141,6 +142,31 @@ Mono<User> getUser(@PathVar("id") long id);
 ```
 
 Defaults to the Java method name when omitted.
+
+### `@ApiRef`
+
+References a named API definition from `reactive.http.clients.<client>.apis.<api-name>`.
+This enables dynamic per-client method/path/timeout registration in configuration.
+
+```java
+@ApiRef("user.getById")
+Mono<User> getUser(@PathVar("id") long id);
+```
+
+```yaml
+reactive:
+  http:
+    clients:
+      user-service:
+        apis:
+          user.getById:
+            method: GET
+            path: /users/{id}
+            timeout-ms: 3000
+```
+
+When `@ApiRef` is present, `method` and `path` are required in the map entry.
+`timeout-ms` is optional (`-1` means unset, `0` disables per-request timeout).
 
 ### `@TimeoutMs`
 

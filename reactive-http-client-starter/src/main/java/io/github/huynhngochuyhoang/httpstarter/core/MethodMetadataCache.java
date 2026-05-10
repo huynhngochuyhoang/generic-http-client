@@ -60,6 +60,16 @@ public class MethodMetadataCache {
             meta.setPathTemplate(method.getAnnotation(PATCH.class).value());
         }
 
+        ApiRef apiRef = method.getAnnotation(ApiRef.class);
+        if (apiRef != null) {
+            requireNonBlankAnnotationValue(apiRef.value(), "@ApiRef", method);
+            meta.setApiRefName(apiRef.value().trim());
+            if (meta.getHttpMethod() != null) {
+                throw new IllegalStateException(
+                        "@ApiRef cannot be combined with HTTP verb annotations on method: " + method);
+            }
+        }
+
         // Warn once per method when the path template is blank.
         // Blank paths are occasionally intentional (resolves to the base URL) but are far
         // more often a copy-paste mistake that only surfaces in staging. A single per-method

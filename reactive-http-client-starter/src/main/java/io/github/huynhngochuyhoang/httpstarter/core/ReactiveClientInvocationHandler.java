@@ -82,6 +82,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private static final Logger log = LoggerFactory.getLogger(ReactiveClientInvocationHandler.class);
     private static final int MAX_LOGGER_CACHE_SIZE = 256;
     private static final int MAX_RESILIENCE_WARNING_KEYS = 256;
+    private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000;
 
     private final WebClient webClient;
     private final MethodMetadataCache metadataCache;
@@ -153,10 +154,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
 
         MethodMetadata meta = metadataCache.get(method);
+        EffectiveApi effectiveApi = resolveEffectiveApi(method, meta);
 
-        if (meta.getHttpMethod() == null) {
+        if (effectiveApi.httpMethod() == null) {
             throw new UnsupportedOperationException(
-                    "Method " + method.getName() + " has no HTTP verb annotation (@GET, @POST, @PUT, @DELETE, @PATCH)");
+                    "Method " + method.getName() + " has no HTTP verb annotation (@GET, @POST, @PUT, @DELETE, @PATCH) or @ApiRef");
         }
 
         RequestArgumentResolver.ResolvedArgs resolved = argumentResolver.resolve(meta, args);
@@ -168,9 +170,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         HttpExchangeLogger exchangeLogger = resolveExchangeLogger(proxy, method, meta);
 
         WebClient.RequestBodySpec requestSpec = webClient
-                .method(HttpMethod.valueOf(meta.getHttpMethod()))
+                .method(HttpMethod.valueOf(effectiveApi.httpMethod()))
                 .uri(uriBuilder -> {
-                    var ub = uriBuilder.path(meta.getPathTemplate());
+                    var ub = uriBuilder.path(effectiveApi.pathTemplate());
                     resolved.queryParams().forEach((k, values) ->
                             values.forEach(v -> ub.queryParam(k, String.valueOf(v))));
                     return ub.build(resolved.pathVars());
@@ -184,7 +186,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         WebClient.RequestBodySpec baseRequestSpec = requestSpec;
 
-        long timeoutMs = resolveTimeoutMs(meta);
+        long timeoutMs = resolveTimeoutMs(meta, effectiveApi.timeoutMs());
 
         final MultiValueMap<String, HttpEntity<?>> multipartBody = meta.isMultipart()
                 ? buildMultipartBody(meta, args)
@@ -217,7 +219,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                         requestHeadersSpec = preparedRequestSpec;
                     }
                     // Apply when: (a) caller set an explicit @TimeoutMs (including 0 to disable), or (b) a resilience timeout resolved to > 0.
-                    return (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET || timeoutMs > 0)
+                    return (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
+                            || effectiveApi.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
+                            || timeoutMs > 0)
                             ? applyRequestLevelResponseTimeout(requestHeadersSpec, timeoutMs)
                             : requestHeadersSpec;
                 });
@@ -239,10 +243,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 responseHeaders.set(Map.of());
                 terminalError.set(null);
                 if (exchangeLogger == null && firstAttempt.compareAndSet(true, false)) {
-                    logRequest(meta, start.get());
+                    logRequest(effectiveApi.httpMethod(), effectiveApi.pathTemplate(), start.get());
                 }
                     });
-            flux = applyResilienceFlux(flux, meta);
+            flux = applyResilienceFlux(flux, meta, effectiveApi.httpMethod());
             if (exchangeLogger != null || observer != null) {
                 AtomicReference<Map<String, List<String>>> inboundHeadersRef = new AtomicReference<>(Map.of());
                 AtomicBoolean reported = new AtomicBoolean(false);
@@ -256,12 +260,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 .doOnError(terminalError::set)
                 .doOnTerminate(() -> {
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
+                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 })
                 .doOnCancel(() -> {
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
+                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 });
             }
@@ -280,10 +284,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             terminalError.set(null);
             terminalBody.set(null);
             if (exchangeLogger == null && firstAttempt.compareAndSet(true, false)) {
-                logRequest(meta, start.get());
+                logRequest(effectiveApi.httpMethod(), effectiveApi.pathTemplate(), start.get());
             }
                 });
-        mono = applyResilienceMono(mono, meta);
+        mono = applyResilienceMono(mono, meta, effectiveApi.httpMethod());
         if (exchangeLogger != null || observer != null) {
             AtomicReference<Map<String, List<String>>> inboundHeadersRef = new AtomicReference<>(Map.of());
             AtomicBoolean reported = new AtomicBoolean(false);
@@ -298,12 +302,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             .doOnError(terminalError::set)
             .doOnTerminate(() -> {
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
+                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
                             responseStatus.get(), responseHeaders.get(), terminalBody.get(), terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             })
             .doOnCancel(() -> {
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, resolved, start.get(),
+                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
                             responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             });
         }
@@ -381,11 +385,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return innerArgs.length == 1 && DataBuffer.class.equals(innerArgs[0]);
     }
 
-    private Mono<?> applyResilienceMono(Mono<?> mono, MethodMetadata meta) {
+    private Mono<?> applyResilienceMono(Mono<?> mono, MethodMetadata meta, String httpMethod) {
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return mono;
 
-        if (isRetryableMethod(meta.getHttpMethod())) {
+        if (isRetryableMethod(httpMethod)) {
             mono = applyRetryMono(mono, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
         mono = applyCircuitBreakerMono(mono, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
@@ -393,11 +397,11 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return mono;
     }
 
-    private Flux<?> applyResilienceFlux(Flux<?> flux, MethodMetadata meta) {
+    private Flux<?> applyResilienceFlux(Flux<?> flux, MethodMetadata meta, String httpMethod) {
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return flux;
 
-        if (isRetryableMethod(meta.getHttpMethod())) {
+        if (isRetryableMethod(httpMethod)) {
             flux = applyRetryFlux(flux, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
         flux = applyCircuitBreakerFlux(flux, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
@@ -411,10 +415,18 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private long resolveTimeoutMs(MethodMetadata meta) {
+        return resolveTimeoutMs(meta, MethodMetadata.TIMEOUT_NOT_SET);
+    }
+
+    private long resolveTimeoutMs(MethodMetadata meta, long configuredApiTimeoutMs) {
         // Method-level override has highest priority.
         // A method annotation value of 0 explicitly disables timeout for that API method.
         if (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET) {
             return meta.getTimeoutMs();
+        }
+        // API-map timeout (via @ApiRef) has second priority.
+        if (configuredApiTimeoutMs != MethodMetadata.TIMEOUT_NOT_SET) {
+            return configuredApiTimeoutMs;
         }
         // Fall back to resilience timeout when method timeout is not configured.
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
@@ -422,6 +434,45 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return resilience.getTimeoutMs();
         }
         return 0;
+    }
+
+    private EffectiveApi resolveEffectiveApi(Method method, MethodMetadata meta) {
+        if (meta.getApiRefName() == null) {
+            return new EffectiveApi(meta.getHttpMethod(), meta.getPathTemplate(), MethodMetadata.TIMEOUT_NOT_SET);
+        }
+
+        ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
+                ? clientConfig.getApis().get(meta.getApiRefName())
+                : null;
+        if (apiConfig == null) {
+            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
+                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
+                    + " is not configured.");
+        }
+        if (!StringUtils.hasText(apiConfig.getMethod())) {
+            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
+                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
+                    + ".method is blank.");
+        }
+        if (!StringUtils.hasText(apiConfig.getPath())) {
+            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
+                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
+                    + ".path is blank.");
+        }
+        long configuredTimeoutMs = apiConfig.getTimeoutMs();
+        if (configuredTimeoutMs < MethodMetadata.TIMEOUT_NOT_SET) {
+            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
+                    + "\") but timeout-ms must be >= -1.");
+        }
+        if (configuredTimeoutMs > MAX_TIMEOUT_MS) {
+            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
+                    + "\") but timeout-ms must be <= " + MAX_TIMEOUT_MS + " ms.");
+        }
+
+        return new EffectiveApi(
+                apiConfig.getMethod().toUpperCase(Locale.ROOT),
+                apiConfig.getPath(),
+                configuredTimeoutMs);
     }
 
     private WebClient.RequestHeadersSpec<?> applyRequestLevelResponseTimeout(
@@ -594,10 +645,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 operatorType, instanceName, error.getMessage());
     }
 
-    private void logRequest(MethodMetadata meta, long startMs) {
+    private void logRequest(String httpMethod, String pathTemplate, long startMs) {
         if (log.isDebugEnabled()) {
             log.debug("[{}] {} {} (resolved in {}ms)",
-                    clientName, meta.getHttpMethod(), meta.getPathTemplate(),
+                    clientName, httpMethod, pathTemplate,
                     System.currentTimeMillis() - startMs);
         }
     }
@@ -673,6 +724,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             HttpExchangeLogger exchangeLogger,
             HttpClientObserver observer,
             MethodMetadata meta,
+            String httpMethod,
+            String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
             long startMs,
             HttpStatusCode statusCode,
@@ -683,17 +736,18 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             int attemptCount,
             long requestBytes) {
         if (exchangeLogger != null) {
-            logExchange(exchangeLogger, meta, resolved, startMs, statusCode, responseHeaders, responseBody, error, inboundHeaders);
+            logExchange(exchangeLogger, httpMethod, pathTemplate, resolved, startMs, statusCode, responseHeaders, responseBody, error, inboundHeaders);
         }
         if (observer != null) {
             long responseBytes = extractContentLengthBytes(responseHeaders);
-            notifyObserver(observer, meta, resolved, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
+            notifyObserver(observer, meta, httpMethod, pathTemplate, resolved, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
         }
     }
 
     private void logExchange(
             HttpExchangeLogger exchangeLogger,
-            MethodMetadata meta,
+            String httpMethod,
+            String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
             long startMs,
             HttpStatusCode statusCode,
@@ -703,8 +757,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             Map<String, List<String>> inboundHeaders) {
         exchangeLogger.log(new HttpExchangeLogContext(
                 clientName,
-                meta.getHttpMethod(),
-                meta.getPathTemplate(),
+                httpMethod,
+                pathTemplate,
                 Map.copyOf(resolved.pathVars()),
                 copyQueryParams(resolved.queryParams()),
                 inboundHeaders,
@@ -738,6 +792,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private void notifyObserver(
             HttpClientObserver observer,
             MethodMetadata meta,
+            String httpMethod,
+            String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
             long startMs,
             HttpStatusCode statusCode,
@@ -752,8 +808,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             observer.record(new HttpClientObserverEvent(
                     clientName,
                     meta.getApiName(),
-                    meta.getHttpMethod(),
-                    meta.getPathTemplate(),
+                    httpMethod,
+                    pathTemplate,
                     statusCode != null ? statusCode.value() : null,
                     System.currentTimeMillis() - startMs,
                     error,
@@ -973,6 +1029,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         return current;
     }
+
+    private record EffectiveApi(String httpMethod, String pathTemplate, long timeoutMs) {}
 
     private record SerializedRequestBody(Object originalBody, Object bodyToWrite, byte[] rawBody) {}
 

@@ -65,6 +65,31 @@ public interface UserApiClient {
 
 The `name` must match a key in `reactive.http.clients` so the starter knows which `base-url` to use.
 
+## Optional: dynamic API map with `@ApiRef`
+
+If you want to keep request method/path/timeout in configuration instead of annotations, use `@ApiRef`:
+
+```java
+@ReactiveHttpClient(name = "user-service")
+public interface UserApiClient {
+    @ApiRef("user.getById")
+    Mono<UserDto> getUser(@PathVar("id") String id);
+}
+```
+
+```yaml
+reactive:
+  http:
+    clients:
+      user-service:
+        base-url: https://api.example.com
+        apis:
+          user.getById:
+            method: GET
+            path: /users/{id}
+            timeout-ms: 5000
+```
+
 ## Minimal `application.yml`
 
 ```yaml

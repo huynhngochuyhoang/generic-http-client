@@ -32,6 +32,8 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         assertFalse(config.isLogBody());
         assertNull(config.getAuthProvider());
+        assertNotNull(config.getApis());
+        assertTrue(config.getApis().isEmpty());
     }
 
     @Test
@@ -159,6 +161,23 @@ class ReactiveHttpClientPropertiesTest {
 
         assertSame(network.getConnectionPool(), effective,
                 "client with no override must see the exact global pool config instance");
+    }
+
+    @Test
+    void apiMapBindsMethodPathAndTimeout() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.user-service.apis.get-user.method", "get");
+        yaml.put("reactive.http.clients.user-service.apis.get-user.path", "/users/{id}");
+        yaml.put("reactive.http.clients.user-service.apis.get-user.timeout-ms", 1200);
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+        ReactiveHttpClientProperties.ApiConfig apiConfig =
+                bound.getClients().get("user-service").getApis().get("get-user");
+
+        assertNotNull(apiConfig);
+        assertEquals("GET", apiConfig.getMethod());
+        assertEquals("/users/{id}", apiConfig.getPath());
+        assertEquals(1200, apiConfig.getTimeoutMs());
     }
 
     // -------------------------------------------------------------------------
