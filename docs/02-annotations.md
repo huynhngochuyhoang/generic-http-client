@@ -169,6 +169,14 @@ Prefer `-` in API keys (for example `user-get-by-id`).
 If an API key contains `.`, use bracket notation in `.properties` (for example
 `reactive.http.clients.user-service.apis[user.getById].method=GET`).
 
+`.yaml` example with quotes around bracket notation:
+
+```yaml
+apis:
+  "[user.getById]":
+    method: GET
+```
+
 When `@ApiRef` is present, `method` and `path` are required in the map entry.
 `timeout-ms` is optional (`-1` means unset, `0` disables per-request timeout).
 

@@ -99,6 +99,21 @@ reactive.http.clients.user-service.apis[user.getById].path=/users/{id}
 reactive.http.clients.user-service.apis[user.getById].timeout-ms=5000
 ```
 
+Add quotes around bracket notation in `.yaml` to avoid parsing errors:
+
+```yaml
+reactive:
+  http:
+    clients:
+      user-service:
+        base-url: https://api.example.com
+        apis:
+          "[user.getById]":
+            method: GET
+            path: /users/{id}
+            timeout-ms: 5000
+```
+
 ## Minimal `application.yml`
 
 ```yaml
