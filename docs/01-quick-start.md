@@ -72,7 +72,7 @@ If you want to keep request method/path/timeout in configuration instead of anno
 ```java
 @ReactiveHttpClient(name = "user-service")
 public interface UserApiClient {
-    @ApiRef("user.getById")
+    @ApiRef("user-get-by-id")
     Mono<UserDto> getUser(@PathVar("id") String id);
 }
 ```
@@ -84,10 +84,19 @@ reactive:
       user-service:
         base-url: https://api.example.com
         apis:
-          user.getById:
+          user-get-by-id:
             method: GET
             path: /users/{id}
             timeout-ms: 5000
+```
+
+Prefer `-` in API keys (for example `user-get-by-id`) so both YAML and `.properties` stay simple.
+If you keep dots in API keys, use bracket notation in `.properties`:
+
+```properties
+reactive.http.clients.user-service.apis[user.getById].method=GET
+reactive.http.clients.user-service.apis[user.getById].path=/users/{id}
+reactive.http.clients.user-service.apis[user.getById].timeout-ms=5000
 ```
 
 ## Minimal `application.yml`

@@ -182,6 +182,23 @@ class ReactiveHttpClientPropertiesTest {
     }
 
     @Test
+    void apiMapWithDotKeyBindsViaBracketNotation() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("reactive.http.clients.user-service.apis[user.getById].method", "get");
+        properties.put("reactive.http.clients.user-service.apis[user.getById].path", "/users/{id}");
+        properties.put("reactive.http.clients.user-service.apis[user.getById].timeout-ms", 1200);
+
+        ReactiveHttpClientProperties bound = bind(properties);
+        ReactiveHttpClientProperties.ApiConfig apiConfig =
+                bound.getClients().get("user-service").getApis().get("user.getById");
+
+        assertNotNull(apiConfig);
+        assertEquals("GET", apiConfig.getMethod());
+        assertEquals("/users/{id}", apiConfig.getPath());
+        assertEquals(1200, apiConfig.getTimeoutMs());
+    }
+
+    @Test
     void apiMapTimeoutRejectsValuesAboveThirtyMinutes() {
         ReactiveHttpClientProperties.ApiConfig apiConfig = new ReactiveHttpClientProperties.ApiConfig();
         assertThrows(IllegalArgumentException.class, () -> apiConfig.setTimeoutMs(30L * 60 * 1000 + 1));

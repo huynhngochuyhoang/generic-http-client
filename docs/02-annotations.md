@@ -145,11 +145,11 @@ Defaults to the Java method name when omitted.
 
 ### `@ApiRef`
 
-References a named API definition from `reactive.http.clients.<client>.apis.<api-name>`.
+References a named API definition from `reactive.http.clients.<client>.apis[<api-name>]`.
 This enables dynamic per-client method/path/timeout registration in configuration.
 
 ```java
-@ApiRef("user.getById")
+@ApiRef("user-get-by-id")
 Mono<User> getUser(@PathVar("id") long id);
 ```
 
@@ -159,11 +159,15 @@ reactive:
     clients:
       user-service:
         apis:
-          user.getById:
+          user-get-by-id:
             method: GET
             path: /users/{id}
             timeout-ms: 3000
 ```
+
+Prefer `-` in API keys (for example `user-get-by-id`).  
+If an API key contains `.`, use bracket notation in `.properties` (for example
+`reactive.http.clients.user-service.apis[user.getById].method=GET`).
 
 When `@ApiRef` is present, `method` and `path` are required in the map entry.
 `timeout-ms` is optional (`-1` means unset, `0` disables per-request timeout).
