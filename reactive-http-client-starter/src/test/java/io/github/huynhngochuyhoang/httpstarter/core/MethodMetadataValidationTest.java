@@ -3,6 +3,7 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
 import io.github.huynhngochuyhoang.httpstarter.annotation.LogHttpExchange;
 import io.github.huynhngochuyhoang.httpstarter.annotation.PATCH;
+import io.github.huynhngochuyhoang.httpstarter.annotation.ApiRef;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
@@ -10,6 +11,7 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,6 +61,22 @@ class MethodMetadataValidationTest {
         assertFalse(metadata.isHttpExchangeLoggingEnabled());
     }
 
+    @Test
+    void shouldParseApiRefAnnotation() throws Exception {
+        Method method = ApiRefClient.class.getMethod("call");
+        MethodMetadata metadata = new MethodMetadataCache().get(method);
+
+        assertEquals("user.getById", metadata.getApiRefName());
+        assertNull(metadata.getHttpMethod());
+    }
+
+    @Test
+    void shouldRejectApiRefCombinedWithHttpVerb() throws Exception {
+        Method method = InvalidApiRefClient.class.getMethod("call");
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> new MethodMetadataCache().get(method));
+        assertTrue(ex.getMessage().contains("@ApiRef cannot be combined"));
+    }
+
     interface InvalidReturnTypeClient {
         @GET("/items")
         String call();
@@ -78,6 +96,17 @@ class MethodMetadataValidationTest {
     interface MethodLoggedClient {
         @GET("/items/override")
         @LogHttpExchange(logger = OverrideTestExchangeLogger.class)
+        Mono<String> call();
+    }
+
+    interface ApiRefClient {
+        @ApiRef("user.getById")
+        Mono<String> call();
+    }
+
+    interface InvalidApiRefClient {
+        @GET("/items")
+        @ApiRef("user.getById")
         Mono<String> call();
     }
 

@@ -343,6 +343,11 @@ public class ReactiveHttpClientProperties {
         private String authProvider;
         private ResilienceConfig resilience = new ResilienceConfig();
         /**
+         * Optional named API definitions used by {@code @ApiRef}.
+         * Keys are logical API names; values define method/path/timeout.
+         */
+        private Map<String, ApiConfig> apis = new HashMap<>();
+        /**
          * Per-client connection-pool override. When {@code null}, the client inherits
          * {@link NetworkConfig#getConnectionPool()}. When set, every field on this
          * instance takes precedence — there is no field-level merging.
@@ -398,6 +403,11 @@ public class ReactiveHttpClientProperties {
         public ResilienceConfig getResilience() { return resilience; }
         public void setResilience(ResilienceConfig resilience) { this.resilience = resilience; }
 
+        public Map<String, ApiConfig> getApis() { return apis; }
+        public void setApis(Map<String, ApiConfig> apis) {
+            this.apis = apis != null ? apis : new HashMap<>();
+        }
+
         public ConnectionPoolConfig getPool() { return pool; }
         public void setPool(ConnectionPoolConfig pool) { this.pool = pool; }
 
@@ -406,6 +416,34 @@ public class ReactiveHttpClientProperties {
 
         public TlsConfig getTls() { return tls; }
         public void setTls(TlsConfig tls) { this.tls = tls; }
+    }
+
+    public static class ApiConfig {
+        private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000;
+        private String method;
+        private String path;
+        /** Timeout in milliseconds. {@code -1} means not configured. */
+        private long timeoutMs = -1;
+
+        public String getMethod() { return method; }
+        public void setMethod(String method) {
+            this.method = method != null ? method.trim().toUpperCase(Locale.ROOT) : null;
+        }
+
+        public String getPath() { return path; }
+        public void setPath(String path) { this.path = path; }
+
+        public long getTimeoutMs() { return timeoutMs; }
+        public void setTimeoutMs(long timeoutMs) {
+            if (timeoutMs < -1) {
+                throw new IllegalArgumentException("reactive.http.clients.*.apis.*.timeout-ms must be >= -1.");
+            }
+            if (timeoutMs > MAX_TIMEOUT_MS) {
+                throw new IllegalArgumentException("reactive.http.clients.*.apis.*.timeout-ms must be <= "
+                        + MAX_TIMEOUT_MS + " ms (30 minutes).");
+            }
+            this.timeoutMs = timeoutMs;
+        }
     }
 
     // ---- resilience sub-config ----

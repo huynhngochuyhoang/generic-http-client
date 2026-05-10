@@ -294,6 +294,31 @@
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig"
     },
     {
+      "name": "reactive.http.clients.[name].apis",
+      "type": "java.util.Map<java.lang.String,io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties.ApiConfig>",
+      "description": "Optional named API definitions for @ApiRef methods. Keys are logical API names.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].apis.[api-name].method",
+      "type": "java.lang.String",
+      "description": "HTTP method for a named API definition used by @ApiRef (for example GET, POST).",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].apis.[api-name].path",
+      "type": "java.lang.String",
+      "description": "Request path template for a named API definition used by @ApiRef.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].apis.[api-name].timeout-ms",
+      "type": "java.lang.Long",
+      "description": "Optional per-request timeout in milliseconds for @ApiRef. -1 means not configured; 0 disables timeout.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig",
+      "defaultValue": -1
+    },
+    {
       "name": "reactive.http.clients.[name].resilience.enabled",
       "type": "java.lang.Boolean",
       "description": "Master switch for Resilience4j operators (retry, circuit-breaker, bulkhead, timeout) on this client. Default: false.",
@@ -577,6 +602,16 @@
         { "value": "SOCKS4", "description": "SOCKS4 proxy." },
         { "value": "SOCKS5", "description": "SOCKS5 proxy." },
         { "value": "NONE",   "description": "Disable proxy for this client (overrides a global proxy)." }
+      ]
+    },
+    {
+      "name": "reactive.http.clients.[name].apis.[api-name].method",
+      "values": [
+        { "value": "GET" },
+        { "value": "POST" },
+        { "value": "PUT" },
+        { "value": "DELETE" },
+        { "value": "PATCH" }
       ]
     }
   ]

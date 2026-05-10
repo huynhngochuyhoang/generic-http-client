@@ -32,6 +32,15 @@ class ReactiveClientInvocationHandlerTimeoutResolutionTest {
     }
 
     @Test
+    void shouldUseApiMapTimeoutWhenMethodTimeoutNotConfigured() throws Exception {
+        ReactiveHttpClientProperties.ClientConfig clientConfig = clientConfig(true, 3000);
+        ReactiveClientInvocationHandler handler = createHandler(clientConfig);
+        MethodMetadata meta = new MethodMetadata();
+
+        assertEquals(1800, resolveTimeoutMs(handler, meta, 1800));
+    }
+
+    @Test
     void shouldReturnZeroWhenNoMethodAndResilienceTimeoutNotConfigured() throws Exception {
         ReactiveHttpClientProperties.ClientConfig clientConfig = clientConfig(false, 3000);
         ReactiveClientInvocationHandler handler = createHandler(clientConfig);
@@ -69,5 +78,11 @@ class ReactiveClientInvocationHandlerTimeoutResolutionTest {
         Method method = ReactiveClientInvocationHandler.class.getDeclaredMethod("resolveTimeoutMs", MethodMetadata.class);
         method.setAccessible(true);
         return (long) method.invoke(handler, meta);
+    }
+
+    private static long resolveTimeoutMs(ReactiveClientInvocationHandler handler, MethodMetadata meta, long configuredApiTimeoutMs) throws Exception {
+        Method method = ReactiveClientInvocationHandler.class.getDeclaredMethod("resolveTimeoutMs", MethodMetadata.class, long.class);
+        method.setAccessible(true);
+        return (long) method.invoke(handler, meta, configuredApiTimeoutMs);
     }
 }

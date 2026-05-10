@@ -47,6 +47,7 @@ public class MethodMetadata {
     private Type responseType;
     private Method method;
     private String apiName;
+    private String apiRefName;
     /** Method-level timeout override in milliseconds: {@link #TIMEOUT_NOT_SET} means not configured. */
     private long timeoutMs = TIMEOUT_NOT_SET;
     private boolean httpExchangeLoggingEnabled;
@@ -103,6 +104,9 @@ public class MethodMetadata {
 
     public String getApiName() { return apiName; }
     public void setApiName(String apiName) { this.apiName = apiName; }
+
+    public String getApiRefName() { return apiRefName; }
+    public void setApiRefName(String apiRefName) { this.apiRefName = apiRefName; }
 
     public long getTimeoutMs() { return timeoutMs; }
     public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }

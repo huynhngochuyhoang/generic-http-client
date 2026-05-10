@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReactiveHttpClientPropertiesTest {
@@ -32,6 +33,8 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         assertFalse(config.isLogBody());
         assertNull(config.getAuthProvider());
+        assertNotNull(config.getApis());
+        assertTrue(config.getApis().isEmpty());
     }
 
     @Test
@@ -159,6 +162,46 @@ class ReactiveHttpClientPropertiesTest {
 
         assertSame(network.getConnectionPool(), effective,
                 "client with no override must see the exact global pool config instance");
+    }
+
+    @Test
+    void apiMapBindsMethodPathAndTimeout() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.user-service.apis.get-user.method", "get");
+        yaml.put("reactive.http.clients.user-service.apis.get-user.path", "/users/{id}");
+        yaml.put("reactive.http.clients.user-service.apis.get-user.timeout-ms", 1200);
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+        ReactiveHttpClientProperties.ApiConfig apiConfig =
+                bound.getClients().get("user-service").getApis().get("get-user");
+
+        assertNotNull(apiConfig);
+        assertEquals("GET", apiConfig.getMethod());
+        assertEquals("/users/{id}", apiConfig.getPath());
+        assertEquals(1200, apiConfig.getTimeoutMs());
+    }
+
+    @Test
+    void apiMapWithDotKeyBindsViaBracketNotation() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("reactive.http.clients.user-service.apis[user.getById].method", "get");
+        properties.put("reactive.http.clients.user-service.apis[user.getById].path", "/users/{id}");
+        properties.put("reactive.http.clients.user-service.apis[user.getById].timeout-ms", 1200);
+
+        ReactiveHttpClientProperties bound = bind(properties);
+        ReactiveHttpClientProperties.ApiConfig apiConfig =
+                bound.getClients().get("user-service").getApis().get("user.getById");
+
+        assertNotNull(apiConfig);
+        assertEquals("GET", apiConfig.getMethod());
+        assertEquals("/users/{id}", apiConfig.getPath());
+        assertEquals(1200, apiConfig.getTimeoutMs());
+    }
+
+    @Test
+    void apiMapTimeoutRejectsValuesAboveThirtyMinutes() {
+        ReactiveHttpClientProperties.ApiConfig apiConfig = new ReactiveHttpClientProperties.ApiConfig();
+        assertThrows(IllegalArgumentException.class, () -> apiConfig.setTimeoutMs(30L * 60 * 1000 + 1));
     }
 
     // -------------------------------------------------------------------------
