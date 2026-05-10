@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReactiveHttpClientPropertiesTest {
@@ -178,6 +179,12 @@ class ReactiveHttpClientPropertiesTest {
         assertEquals("GET", apiConfig.getMethod());
         assertEquals("/users/{id}", apiConfig.getPath());
         assertEquals(1200, apiConfig.getTimeoutMs());
+    }
+
+    @Test
+    void apiMapTimeoutRejectsValuesAboveThirtyMinutes() {
+        ReactiveHttpClientProperties.ApiConfig apiConfig = new ReactiveHttpClientProperties.ApiConfig();
+        assertThrows(IllegalArgumentException.class, () -> apiConfig.setTimeoutMs(30L * 60 * 1000 + 1));
     }
 
     // -------------------------------------------------------------------------

@@ -82,7 +82,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private static final Logger log = LoggerFactory.getLogger(ReactiveClientInvocationHandler.class);
     private static final int MAX_LOGGER_CACHE_SIZE = 256;
     private static final int MAX_RESILIENCE_WARNING_KEYS = 256;
-    private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000;
 
     private final WebClient webClient;
     private final MethodMetadataCache metadataCache;
@@ -444,30 +443,18 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
                 ? clientConfig.getApis().get(meta.getApiRefName())
                 : null;
+        String configPrefix = "reactive.http.clients." + clientName + ".apis." + meta.getApiRefName();
+        String apiRefContext = "Method " + method + " references @ApiRef(\"" + meta.getApiRefName() + "\")";
         if (apiConfig == null) {
-            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
-                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
-                    + " is not configured.");
+            throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
         }
         if (!StringUtils.hasText(apiConfig.getMethod())) {
-            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
-                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
-                    + ".method is blank.");
+            throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".method is blank.");
         }
         if (!StringUtils.hasText(apiConfig.getPath())) {
-            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
-                    + "\") but reactive.http.clients." + clientName + ".apis." + meta.getApiRefName()
-                    + ".path is blank.");
+            throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".path is blank.");
         }
         long configuredTimeoutMs = apiConfig.getTimeoutMs();
-        if (configuredTimeoutMs < MethodMetadata.TIMEOUT_NOT_SET) {
-            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
-                    + "\") but timeout-ms must be >= -1.");
-        }
-        if (configuredTimeoutMs > MAX_TIMEOUT_MS) {
-            throw new IllegalStateException("Method " + method + " references @ApiRef(\"" + meta.getApiRefName()
-                    + "\") but timeout-ms must be <= " + MAX_TIMEOUT_MS + " ms.");
-        }
 
         return new EffectiveApi(
                 apiConfig.getMethod().toUpperCase(Locale.ROOT),

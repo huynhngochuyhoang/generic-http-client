@@ -66,7 +66,7 @@ public class MethodMetadataCache {
             meta.setApiRefName(apiRef.value().trim());
             if (meta.getHttpMethod() != null) {
                 throw new IllegalStateException(
-                        "@ApiRef cannot be combined with HTTP verb annotations on method: " + method);
+                        "@ApiRef cannot be combined with @" + meta.getHttpMethod() + " on method: " + method);
             }
         }
 

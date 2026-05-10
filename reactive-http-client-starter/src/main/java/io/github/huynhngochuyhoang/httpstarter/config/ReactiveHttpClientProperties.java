@@ -419,6 +419,7 @@ public class ReactiveHttpClientProperties {
     }
 
     public static class ApiConfig {
+        private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000;
         private String method;
         private String path;
         /** Timeout in milliseconds. {@code -1} means not configured. */
@@ -433,7 +434,16 @@ public class ReactiveHttpClientProperties {
         public void setPath(String path) { this.path = path; }
 
         public long getTimeoutMs() { return timeoutMs; }
-        public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
+        public void setTimeoutMs(long timeoutMs) {
+            if (timeoutMs < -1) {
+                throw new IllegalArgumentException("reactive.http.clients.*.apis.*.timeout-ms must be >= -1.");
+            }
+            if (timeoutMs > MAX_TIMEOUT_MS) {
+                throw new IllegalArgumentException("reactive.http.clients.*.apis.*.timeout-ms must be <= "
+                        + MAX_TIMEOUT_MS + " ms (30 minutes).");
+            }
+            this.timeoutMs = timeoutMs;
+        }
     }
 
     // ---- resilience sub-config ----

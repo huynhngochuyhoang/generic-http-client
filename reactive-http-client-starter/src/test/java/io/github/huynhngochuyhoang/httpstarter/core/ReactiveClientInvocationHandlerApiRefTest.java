@@ -3,6 +3,7 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 import io.github.huynhngochuyhoang.httpstarter.annotation.ApiRef;
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -85,7 +86,7 @@ class ReactiveClientInvocationHandlerApiRefTest {
                 "test-client",
                 mock(ApplicationContext.class),
                 new NoopResilienceOperatorApplier(),
-                null,
+                mock(ObjectMapper.class),
                 new ReactiveHttpClientProperties.ObservabilityConfig()
         );
     }
