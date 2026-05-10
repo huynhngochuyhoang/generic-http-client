@@ -34,9 +34,9 @@ class ReactiveClientInvocationHandlerApiRefTest {
         MethodMetadata metadata = new MethodMetadataCache().get(method);
 
         Object effectiveApi = resolveEffectiveApi(handler, method, metadata);
-        assertEquals("GET", effectiveApi.getClass().getDeclaredMethod("httpMethod").invoke(effectiveApi));
-        assertEquals("/users/{id}", effectiveApi.getClass().getDeclaredMethod("pathTemplate").invoke(effectiveApi));
-        assertEquals(1200L, effectiveApi.getClass().getDeclaredMethod("timeoutMs").invoke(effectiveApi));
+        assertEquals("GET", invokeAccessor(effectiveApi, "httpMethod"));
+        assertEquals("/users/{id}", invokeAccessor(effectiveApi, "pathTemplate"));
+        assertEquals(1200L, invokeAccessor(effectiveApi, "timeoutMs"));
     }
 
     @Test
@@ -58,8 +58,8 @@ class ReactiveClientInvocationHandlerApiRefTest {
         MethodMetadata metadata = new MethodMetadataCache().get(method);
 
         Object effectiveApi = resolveEffectiveApi(handler, method, metadata);
-        assertEquals("GET", effectiveApi.getClass().getDeclaredMethod("httpMethod").invoke(effectiveApi));
-        assertEquals("/legacy", effectiveApi.getClass().getDeclaredMethod("pathTemplate").invoke(effectiveApi));
+        assertEquals("GET", invokeAccessor(effectiveApi, "httpMethod"));
+        assertEquals("/legacy", invokeAccessor(effectiveApi, "pathTemplate"));
     }
 
     private static Object resolveEffectiveApi(ReactiveClientInvocationHandler handler, Method method, MethodMetadata metadata) throws Exception {
@@ -74,6 +74,12 @@ class ReactiveClientInvocationHandlerApiRefTest {
             }
             throw e;
         }
+    }
+
+    private static Object invokeAccessor(Object target, String accessorName) throws Exception {
+        Method accessor = target.getClass().getDeclaredMethod(accessorName);
+        accessor.setAccessible(true);
+        return accessor.invoke(target);
     }
 
     private static ReactiveClientInvocationHandler createHandler(ReactiveHttpClientProperties.ClientConfig clientConfig) {

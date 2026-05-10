@@ -303,19 +303,19 @@
       "name": "reactive.http.clients.[name].apis.[api-name].method",
       "type": "java.lang.String",
       "description": "HTTP method for a named API definition used by @ApiRef (for example GET, POST).",
-      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig"
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties.ApiConfig"
     },
     {
       "name": "reactive.http.clients.[name].apis.[api-name].path",
       "type": "java.lang.String",
       "description": "Request path template for a named API definition used by @ApiRef.",
-      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig"
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties.ApiConfig"
     },
     {
       "name": "reactive.http.clients.[name].apis.[api-name].timeout-ms",
       "type": "java.lang.Long",
       "description": "Optional per-request timeout in milliseconds for @ApiRef. -1 means not configured; 0 disables timeout.",
-      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ApiConfig",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties.ApiConfig",
       "defaultValue": -1
     },
     {

@@ -443,7 +443,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
                 ? clientConfig.getApis().get(meta.getApiRefName())
                 : null;
-        String configPrefix = "reactive.http.clients." + clientName + ".apis." + meta.getApiRefName();
+        String configPrefix = "reactive.http.clients." + clientName + ".apis[" + meta.getApiRefName() + "]";
         String apiRefContext = "Method " + method + " references @ApiRef(\"" + meta.getApiRefName() + "\")";
         if (apiConfig == null) {
             throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
