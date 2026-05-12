@@ -3,6 +3,10 @@
 > Companion to `ROADMAP.md`. Ordered by the priority suggested at the bottom of that document.
 > Check items off as they ship. Each top-level entry points back to the matching section in
 > `ROADMAP.md` for full rationale — this file is the tracker, not the spec.
+>
+> **Items originally marked `Deferred` have been moved to `ROADMAP_V2.md`** — see
+> there for ongoing work. This file now tracks only V1 status; every remaining
+> entry below is either complete (`[x]`) or has its deferred sub-tasks migrated.
 
 ---
 
@@ -227,11 +231,11 @@
   default) so unmatched calls fail loudly. Uses an empty
   `StaticApplicationContext` so the helper has no Mockito runtime
   dependency on the consumer side._
-- [ ] JUnit 5 `@MockHttpServer` extension backed by a canned-response registry.
-  _Deferred. The matcher-driven builder API on `MockReactiveHttpClient`
-  already covers the same ergonomics inside a single `@Test`; the JUnit
-  5 extension is a thin convenience wrapper that can land in a follow-up
-  if usage demands it._
+- [→] JUnit 5 `@MockHttpServer` extension backed by a canned-response registry.
+  _Moved to `ROADMAP_V2.md` — **B1**. The matcher-driven builder API on
+  `MockReactiveHttpClient` already covers the same ergonomics inside a single
+  `@Test`; the extension waits on real consumer feedback for multi-test
+  patterns._
 - [x] Assertion helpers for `ErrorCategory` outcomes.
   _`ErrorCategoryAssertions.assertThatFails(mono).hasErrorCategory(...).hasStatusCode(...)`._
 - [x] Port a subset of the internal tests to the new module as a dogfood check.
@@ -255,20 +259,14 @@
     forwarding, builder validation. Concurrent-refresh semantics are
     inherited from the surrounding `RefreshingBearerAuthProvider` —
     already covered by its existing tests._
-- [ ] `AwsSigV4AuthProvider` implementing `AuthProvider` directly.
-  **Deferred.** SigV4 is ~300 LOC of cryptographic code (canonical
-  request construction, double-HMAC key derivation, regional / service
-  scope handling). Shipping it without thorough AWS reference test
-  vectors is a footgun — production HMAC bugs typically only surface
-  under very specific request shapes (URL-encoded path segments, empty
-  query strings, multi-line headers). Track as a follow-up dedicated PR
-  with the official AWS SigV4 test-suite vectors as the acceptance bar.
-  - [ ] Canonical request → string-to-sign → signature; reuse cached body bytes.
-  - [ ] Unit test against AWS SigV4 test vectors.
-- [ ] Auto-configuration hooks so users can enable either via `application.yml`.
-  _Deferred alongside SigV4 — once both providers exist, a single
-  property-driven config block makes more sense than wiring OAuth2
-  alone._
+- [→] `AwsSigV4AuthProvider` implementing `AuthProvider` directly.
+  _Moved to `ROADMAP_V2.md` — **A1**. SigV4 is ~300 LOC of cryptographic
+  code; the acceptance bar in V2 pins it to the official AWS SigV4
+  test-suite vectors so production HMAC bugs (URL-encoded path segments,
+  empty query strings, multi-line headers) are caught before release._
+- [→] Auto-configuration hooks so users can enable either via `application.yml`.
+  _Moved to `ROADMAP_V2.md` — **A2**. Best designed alongside SigV4 so the
+  YAML shape covers both providers' parameter sets._
 
 ---
 
@@ -292,12 +290,22 @@
   name when `ErrorCategory` is null (e.g. raw network errors). Starter-specific
   attributes (`rhttp.client.name`, `rhttp.api.name`, `rhttp.attempt.count`,
   `rhttp.request.bytes`, `rhttp.response.bytes`) are also recorded._
-- [ ] Baggage propagation through the Reactor `Context`.
-  **Deferred.** OTel `Baggage` propagation requires hooking the OTel context
-  through Reactor's context-propagation hook (separate from the observer
-  callback). Best done in a follow-up that wires the existing
-  `CorrelationIdWebFilter` into OTel baggage natively, rather than as a
-  one-off in this module.
+- [x] Baggage propagation through the Reactor `Context`.
+  _Shipped via two pieces in the OTel module: `OpenTelemetryContextWebFilter`
+  (server-side) extracts the OTel `Context` from inbound headers using the
+  configured `TextMapPropagator` and stores it under the
+  `otel.context` Reactor `ContextView` key;
+  `OpenTelemetryContextExchangeFilter` (client-side) reads from the same key
+  and injects propagated headers onto outbound requests, falling back to
+  `Context.current()` when no inbound context is present. The exchange
+  filter is wired via a `WebClientCustomizer` so every starter-built
+  `WebClient` picks it up automatically. The pipeline transparently
+  propagates both W3C trace context (`traceparent`) and W3C baggage
+  (`baggage`) — whichever propagators the user has registered on their
+  `OpenTelemetry` instance. Caller-supplied headers are never overwritten.
+  Covered by `OpenTelemetryContextPropagationTest` (5 cases: WebFilter
+  extraction, exchange-filter injection, caller-header preservation,
+  no-context no-op, end-to-end pipeline)._
 - [x] Auto-configure under `@ConditionalOnClass(io.opentelemetry.api.OpenTelemetry.class)`.
   _Plus `@ConditionalOnBean(OpenTelemetry.class)` and
   `@ConditionalOnProperty(reactive.http.observability.otel.enabled, default true)`.

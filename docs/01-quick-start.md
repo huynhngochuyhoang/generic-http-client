@@ -12,7 +12,7 @@
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.10.1</version>
+  <version>1.14.0</version>
 </dependency>
 ```
 

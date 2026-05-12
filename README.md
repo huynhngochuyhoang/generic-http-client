@@ -25,7 +25,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 | [Connection Pool](docs/05-connection-pool.md) | Pool tuning, per-client overrides, and pool metrics |
 | [Outbound Auth Providers](docs/06-auth-providers.md) | Bearer, OAuth2, HMAC, API key, and custom providers |
 | [Resilience4j Integration](docs/07-resilience4j.md) | Retry, circuit breaker, bulkhead, and per-method overrides |
-| [Observability](docs/08-observability.md) | Micrometer metrics, health indicator, OpenTelemetry tracing |
+| [Observability](docs/08-observability.md) | Micrometer metrics, health indicator, OpenTelemetry tracing and baggage propagation |
 | [Correlation ID](docs/09-correlation-id.md) | Inbound capture, outbound propagation, and inbound header filtering |
 | [Multipart Uploads](docs/10-multipart.md) | `@MultipartBody`, `@FormField`, `@FormFile`, and `FileAttachment` |
 | [Streaming Responses](docs/11-streaming.md) | `Flux<DataBuffer>` and `Mono<ResponseEntity<Flux<DataBuffer>>>` |
@@ -73,7 +73,7 @@ Spring's `@HttpExchange` gives you declarative HTTP mapping and nothing more. **
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.12.1</version>
+  <version>1.14.0</version>
 </dependency>
 ```
 
@@ -617,9 +617,11 @@ outbound exchange as an OpenTelemetry span using the standard
 
 Activation: when `opentelemetry-api` is on the classpath **and** an
 `OpenTelemetry` bean is available in the context, the auto-configuration
-registers `OpenTelemetryHttpClientObserver` under the property
-`reactive.http.observability.otel.enabled` (default `true`). Set to `false`
-to disable without removing the dependency.
+registers `OpenTelemetryHttpClientObserver`, an inbound
+`OpenTelemetryContextWebFilter` for reactive web applications, and a
+`WebClientCustomizer` that adds outbound propagation to starter-built clients.
+All are controlled by `reactive.http.observability.otel.enabled` (default
+`true`). Set it to `false` to disable without removing the dependency.
 
 | Span field | Source |
 |---|---|
@@ -635,6 +637,13 @@ to disable without removing the dependency.
 
 Errors set `StatusCode.ERROR` and call `recordException(...)` so the
 exception event lands in the span.
+
+Trace context and baggage propagation: the OTel module uses the
+`TextMapPropagator` configured on your `OpenTelemetry` bean. With the standard
+W3C propagators, inbound `traceparent` and `baggage` headers are extracted into
+Reactor `Context` and injected onto downstream `@ReactiveHttpClient` calls.
+If the outbound request already has a propagation header, the caller-supplied
+value is preserved.
 
 > ⚠️ The OTel observer registers as the only `HttpClientObserver` under
 > `@ConditionalOnMissingBean(HttpClientObserver.class)` — pulling in the OTel
@@ -706,6 +715,8 @@ reactive-http-client/
 └── reactive-http-client-otel/
     ├── pom.xml
     └── src/main/java/io/github/huynhngochuyhoang/httpstarter/otel/
+        ├── OpenTelemetryContextExchangeFilter.java
+        ├── OpenTelemetryContextWebFilter.java
         ├── OpenTelemetryHttpClientAutoConfiguration.java
         └── OpenTelemetryHttpClientObserver.java
 ```
