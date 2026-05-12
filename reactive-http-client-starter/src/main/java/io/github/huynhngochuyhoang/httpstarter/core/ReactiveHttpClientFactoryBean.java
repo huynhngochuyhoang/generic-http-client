@@ -86,6 +86,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         MethodMetadataCache metadataCache = applicationContext
                 .getBeanProvider(MethodMetadataCache.class)
                 .getIfAvailable(MethodMetadataCache::new);
+        validateApiRefMappings(type, metadataCache, config, clientName);
 
         DefaultErrorDecoder errorDecoder = applicationContext
                 .getBeanProvider(DefaultErrorDecoder.class)
@@ -400,6 +401,47 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                     "Reactive HTTP client '" + clientName + "' references undefined Resilience4j instances:\n  - "
                             + String.join("\n  - ", missing)
                             + "\nDefine them under resilience4j.<retry|circuitbreaker|bulkhead>.instances.* in application config.");
+        }
+    }
+
+    /**
+     * Eagerly validates {@code @ApiRef} usage so typos in API-map keys fail fast
+     * at startup instead of throwing only when the method is first invoked.
+     */
+    private void validateApiRefMappings(Class<?> clientInterface,
+                                        MethodMetadataCache metadataCache,
+                                        ReactiveHttpClientProperties.ClientConfig clientConfig,
+                                        String clientName) {
+        for (Method method : clientInterface.getMethods()) {
+            if (method.isSynthetic() || method.isDefault() || method.isBridge()) continue;
+            MethodMetadata meta;
+            try {
+                meta = metadataCache.get(method);
+            } catch (RuntimeException e) {
+                // Methods that fail to parse (e.g. helper methods without HTTP verb)
+                // are validated only when invoked; skip @ApiRef startup checks here.
+                log.debug("Skipping @ApiRef startup validation for {}.{} due to metadata parse failure.",
+                        method.getDeclaringClass().getSimpleName(), method.getName(), e);
+                continue;
+            }
+            String apiRefName = meta.getApiRefName();
+            if (!StringUtils.hasText(apiRefName)) {
+                continue;
+            }
+            ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
+                    ? clientConfig.getApis().get(apiRefName)
+                    : null;
+            String configPrefix = ApiRefValidationSupport.configPrefix(clientName, apiRefName);
+            String apiRefContext = ApiRefValidationSupport.apiRefContext(method, apiRefName);
+            if (apiConfig == null) {
+                throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
+            }
+            if (!StringUtils.hasText(apiConfig.getMethod())) {
+                throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".method is blank.");
+            }
+            if (!StringUtils.hasText(apiConfig.getPath())) {
+                throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".path is blank.");
+            }
         }
     }
 
