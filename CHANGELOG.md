@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.14.0] – 2026-05-12
+
+### Added
+
+- **OpenTelemetry Reactor context propagation.** The optional
+  `reactive-http-client-otel` module now auto-registers a server-side
+  `OpenTelemetryContextWebFilter` that extracts inbound OTel context from
+  request headers and stores it in Reactor `Context`.
+- **Outbound OTel header propagation for starter-built clients.** Added
+  `OpenTelemetryContextExchangeFilter`, wired through a `WebClientCustomizer`,
+  to inject the configured OTel propagator headers onto outbound
+  `@ReactiveHttpClient` requests. This propagates W3C `traceparent` and
+  `baggage` when those propagators are configured on the application
+  `OpenTelemetry` bean.
+- **OTel propagation regression coverage.** Added tests for inbound baggage
+  extraction, outbound injection, caller-supplied header preservation,
+  no-context no-op behavior, and the end-to-end WebFilter-to-WebClient flow.
+
+### Changed
+
+- **OTel module docs now cover trace context and baggage pass-through.**
+  `docs/08-observability.md` and the README describe how inbound OTel
+  context reaches outbound reactive HTTP clients, including the rule that
+  caller-supplied propagation headers are not overwritten.
+
+---
+
 ## [1.13.1] – 2026-05-12
 
 ### Changed
@@ -620,7 +647,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.1...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.12.1...v1.13.0
 [1.12.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.12.0...v1.12.1

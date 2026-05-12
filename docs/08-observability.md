@@ -161,7 +161,13 @@ The optional OTel companion records each outbound exchange as a span using the [
 
 ### Activation
 
-When `opentelemetry-api` is on the classpath and an `OpenTelemetry` bean is present, the auto-configuration registers `OpenTelemetryHttpClientObserver`. Disable without removing the dependency:
+When `opentelemetry-api` is on the classpath and an `OpenTelemetry` bean is present, the auto-configuration registers:
+
+- `OpenTelemetryHttpClientObserver` for outbound client spans.
+- `OpenTelemetryContextWebFilter` in reactive web applications, which extracts inbound OTel context from request headers and stores it in Reactor `Context`.
+- A `WebClientCustomizer` that adds `OpenTelemetryContextExchangeFilter` to starter-built clients, injecting configured propagation headers onto outbound requests.
+
+Disable without removing the dependency:
 
 ```yaml
 reactive:
@@ -188,6 +194,25 @@ reactive:
 | `rhttp.response.bytes` | Response body bytes (from `Content-Length`) |
 
 Errors set `StatusCode.ERROR` and call `recordException(...)` so the exception event appears in the span.
+
+### Trace context and baggage propagation
+
+The OTel companion propagates whatever headers are produced by the application's configured `TextMapPropagator`.
+With the standard W3C propagators, this means inbound `traceparent` and `baggage` headers are extracted once by the WebFilter, carried through Reactor `Context`, and injected onto downstream `@ReactiveHttpClient` calls.
+
+```java
+@Bean
+OpenTelemetry openTelemetry() {
+    return OpenTelemetrySdk.builder()
+            .setPropagators(ContextPropagators.create(
+                    TextMapPropagator.composite(
+                            W3CTraceContextPropagator.getInstance(),
+                            W3CBaggagePropagator.getInstance())))
+            .build();
+}
+```
+
+The outbound filter falls back to `io.opentelemetry.context.Context.current()` when no Reactor context entry exists, so calls made inside a manually scoped OTel context still propagate. Caller-supplied headers win: if a request already has `traceparent`, `baggage`, or another propagator header, the filter leaves that value untouched.
 
 ### Mutual exclusion with Micrometer
 
