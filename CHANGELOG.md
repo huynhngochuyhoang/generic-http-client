@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.13.1] – 2026-05-12
+
+### Changed
+
+- **`@ApiRef` mismatch checks now fail fast at startup.** Client proxy creation validates
+  referenced API-map entries so missing mappings and blank `method` / `path` values fail
+  immediately with config-path-specific diagnostics instead of surfacing at first invocation.
+- **Unified `@ApiRef` diagnostic path formatting.** Startup and invocation-time validation now
+  share the same API config-prefix/context builder, keeping error messages consistent.
+
+### Added
+
+- **Startup validation coverage for blank API-map fields.** Added tests that assert
+  `ReactiveHttpClientFactoryBean#getObject()` fails when `apis[...].method` or `apis[...].path`
+  is blank for a referenced `@ApiRef`.
+
+---
+
 ## [1.13.0] – 2026-05-10
 
 ### Added
@@ -602,7 +620,14 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.1...HEAD
+[1.13.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.0...v1.13.1
+[1.13.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.12.1...v1.13.0
+[1.12.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.12.0...v1.12.1
+[1.12.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.11.1...v1.12.0
+[1.11.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.11.0...v1.11.1
+[1.11.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.10.1...v1.11.0
+[1.10.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.8.0...v1.8.1
