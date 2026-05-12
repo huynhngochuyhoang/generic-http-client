@@ -41,6 +41,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
     private static final int MAX_CODEC_MAX_IN_MEMORY_SIZE_MB = Integer.MAX_VALUE / (1024 * 1024);
+    private static final String API_CONFIG_PREFIX_TEMPLATE = "reactive.http.clients.%s.apis[%s]";
 
     private Class<T> type;
     private ApplicationContext applicationContext;
@@ -387,6 +388,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             } catch (RuntimeException e) {
                 // Methods that fail to parse (e.g. helper methods without HTTP verb)
                 // are validated only when invoked; skip them here.
+                log.debug("Skipping @ApiRef startup validation for {}.{} due to metadata parse failure.",
+                        method.getDeclaringClass().getSimpleName(), method.getName(), e);
                 continue;
             }
             checkInstance(applier, ResilienceOperatorApplier.InstanceType.RETRY,
@@ -429,7 +432,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
                     ? clientConfig.getApis().get(apiRefName)
                     : null;
-            String configPrefix = "reactive.http.clients." + clientName + ".apis[" + apiRefName + "]";
+            String configPrefix = API_CONFIG_PREFIX_TEMPLATE.formatted(clientName, apiRefName);
             String apiRefContext = "Method " + method + " references @ApiRef(\"" + apiRefName + "\")";
             if (apiConfig == null) {
                 throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
