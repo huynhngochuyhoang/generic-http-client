@@ -3,6 +3,7 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 import io.github.huynhngochuyhoang.httpstarter.annotation.Bulkhead;
 import io.github.huynhngochuyhoang.httpstarter.annotation.CircuitBreaker;
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
+import io.github.huynhngochuyhoang.httpstarter.annotation.ApiRef;
 import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
 import io.github.huynhngochuyhoang.httpstarter.annotation.Retry;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
@@ -16,6 +17,7 @@ import org.springframework.context.support.GenericApplicationContext;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -127,6 +129,30 @@ class PerMethodResilienceTest {
         ctx.close();
     }
 
+    @Test
+    void factoryBeanFailsFastOnMissingApiRefMapping() {
+        GenericApplicationContext ctx = new GenericApplicationContext();
+        ctx.refresh();
+
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        ReactiveHttpClientProperties.ClientConfig clientConfig = new ReactiveHttpClientProperties.ClientConfig();
+        clientConfig.setBaseUrl("http://test.local");
+        clientConfig.setApis(Map.of());
+        properties.getClients().put("ghost-apiref-client", clientConfig);
+        ctx.getBeanFactory().registerSingleton("reactiveHttpClientProperties", properties);
+
+        ReactiveHttpClientFactoryBean<MissingApiRefMappingClient> factory = new ReactiveHttpClientFactoryBean<>();
+        factory.setApplicationContext(ctx);
+        factory.setType(MissingApiRefMappingClient.class);
+
+        assertThatThrownBy(factory::getObject)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("references @ApiRef(\"user.getById\")")
+                .hasMessageContaining("is not configured.");
+
+        ctx.close();
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -165,6 +191,12 @@ class PerMethodResilienceTest {
     interface MissingInstanceClient {
         @GET("/x")
         @Retry("ghost-retry")
+        Mono<String> ghost();
+    }
+
+    @ReactiveHttpClient(name = "ghost-apiref-client", baseUrl = "http://test.local")
+    interface MissingApiRefMappingClient {
+        @ApiRef("user.getById")
         Mono<String> ghost();
     }
 }
