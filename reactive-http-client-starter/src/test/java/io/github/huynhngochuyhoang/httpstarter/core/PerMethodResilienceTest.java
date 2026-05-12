@@ -153,6 +153,58 @@ class PerMethodResilienceTest {
         ctx.close();
     }
 
+    @Test
+    void factoryBeanFailsFastWhenApiRefMethodIsBlank() {
+        GenericApplicationContext ctx = new GenericApplicationContext();
+        ctx.refresh();
+
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        ReactiveHttpClientProperties.ClientConfig clientConfig = new ReactiveHttpClientProperties.ClientConfig();
+        clientConfig.setBaseUrl("http://test.local");
+        ReactiveHttpClientProperties.ApiConfig apiConfig = new ReactiveHttpClientProperties.ApiConfig();
+        apiConfig.setMethod(" ");
+        apiConfig.setPath("/users/{id}");
+        clientConfig.setApis(Map.of("user.getById", apiConfig));
+        properties.getClients().put("ghost-apiref-client", clientConfig);
+        ctx.getBeanFactory().registerSingleton("reactiveHttpClientProperties", properties);
+
+        ReactiveHttpClientFactoryBean<MissingApiRefMappingClient> factory = new ReactiveHttpClientFactoryBean<>();
+        factory.setApplicationContext(ctx);
+        factory.setType(MissingApiRefMappingClient.class);
+
+        assertThatThrownBy(factory::getObject)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reactive.http.clients.ghost-apiref-client.apis[user.getById].method is blank.");
+
+        ctx.close();
+    }
+
+    @Test
+    void factoryBeanFailsFastWhenApiRefPathIsBlank() {
+        GenericApplicationContext ctx = new GenericApplicationContext();
+        ctx.refresh();
+
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        ReactiveHttpClientProperties.ClientConfig clientConfig = new ReactiveHttpClientProperties.ClientConfig();
+        clientConfig.setBaseUrl("http://test.local");
+        ReactiveHttpClientProperties.ApiConfig apiConfig = new ReactiveHttpClientProperties.ApiConfig();
+        apiConfig.setMethod("GET");
+        apiConfig.setPath(" ");
+        clientConfig.setApis(Map.of("user.getById", apiConfig));
+        properties.getClients().put("ghost-apiref-client", clientConfig);
+        ctx.getBeanFactory().registerSingleton("reactiveHttpClientProperties", properties);
+
+        ReactiveHttpClientFactoryBean<MissingApiRefMappingClient> factory = new ReactiveHttpClientFactoryBean<>();
+        factory.setApplicationContext(ctx);
+        factory.setType(MissingApiRefMappingClient.class);
+
+        assertThatThrownBy(factory::getObject)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reactive.http.clients.ghost-apiref-client.apis[user.getById].path is blank.");
+
+        ctx.close();
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

@@ -41,7 +41,6 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
     private static final int MAX_CODEC_MAX_IN_MEMORY_SIZE_MB = Integer.MAX_VALUE / (1024 * 1024);
-    private static final String API_CONFIG_PREFIX_TEMPLATE = "reactive.http.clients.%s.apis[%s]";
 
     private Class<T> type;
     private ApplicationContext applicationContext;
@@ -432,8 +431,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
                     ? clientConfig.getApis().get(apiRefName)
                     : null;
-            String configPrefix = API_CONFIG_PREFIX_TEMPLATE.formatted(clientName, apiRefName);
-            String apiRefContext = "Method " + method + " references @ApiRef(\"" + apiRefName + "\")";
+            String configPrefix = ApiRefValidationSupport.configPrefix(clientName, apiRefName);
+            String apiRefContext = ApiRefValidationSupport.apiRefContext(method, apiRefName);
             if (apiConfig == null) {
                 throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
             }
