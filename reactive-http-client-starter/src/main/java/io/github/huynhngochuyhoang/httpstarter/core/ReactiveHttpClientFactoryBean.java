@@ -388,8 +388,6 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             } catch (RuntimeException e) {
                 // Methods that fail to parse (e.g. helper methods without HTTP verb)
                 // are validated only when invoked; skip them here.
-                log.debug("Skipping @ApiRef startup validation for {}.{} due to metadata parse failure.",
-                        method.getDeclaringClass().getSimpleName(), method.getName(), e);
                 continue;
             }
             checkInstance(applier, ResilienceOperatorApplier.InstanceType.RETRY,
@@ -422,7 +420,9 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 meta = metadataCache.get(method);
             } catch (RuntimeException e) {
                 // Methods that fail to parse (e.g. helper methods without HTTP verb)
-                // are validated only when invoked; skip them here.
+                // are validated only when invoked; skip @ApiRef startup checks here.
+                log.debug("Skipping @ApiRef startup validation for {}.{} due to metadata parse failure.",
+                        method.getDeclaringClass().getSimpleName(), method.getName(), e);
                 continue;
             }
             String apiRefName = meta.getApiRefName();
