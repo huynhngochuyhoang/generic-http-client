@@ -2,6 +2,9 @@ package io.github.huynhngochuyhoang.httpstarter.config;
 
 import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
 import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
+import io.github.huynhngochuyhoang.httpstarter.auth.AuthProviderFactory;
+import io.github.huynhngochuyhoang.httpstarter.auth.AwsSigV4AuthProviderFactory;
+import io.github.huynhngochuyhoang.httpstarter.auth.OAuth2ClientCredentialsAuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientHealthIndicator;
@@ -93,6 +96,18 @@ public class ReactiveHttpClientAutoConfiguration {
     @ConditionalOnMissingBean
     public MethodMetadataCache methodMetadataCache() {
         return new MethodMetadataCache();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(OAuth2ClientCredentialsAuthProviderFactory.class)
+    public AuthProviderFactory oauth2ClientCredentialsAuthProviderFactory() {
+        return new OAuth2ClientCredentialsAuthProviderFactory();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(AwsSigV4AuthProviderFactory.class)
+    public AuthProviderFactory awsSigV4AuthProviderFactory() {
+        return new AwsSigV4AuthProviderFactory();
     }
 
     /**

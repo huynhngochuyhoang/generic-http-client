@@ -294,6 +294,86 @@
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig"
     },
     {
+      "name": "reactive.http.clients.[name].auth.type",
+      "type": "java.lang.String",
+      "description": "Object-style auth provider type. Built-in values: oauth2-client-credentials, aws-sigv4. Ignored when auth-provider bean name is set.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.token-uri",
+      "type": "java.lang.String",
+      "description": "OAuth2 token endpoint URI for type oauth2-client-credentials.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.client-id",
+      "type": "java.lang.String",
+      "description": "OAuth2 client ID for type oauth2-client-credentials.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.client-secret",
+      "type": "java.lang.String",
+      "description": "OAuth2 client secret for type oauth2-client-credentials.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.scope",
+      "type": "java.lang.String",
+      "description": "Optional OAuth2 scope sent to the token endpoint.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.audience",
+      "type": "java.lang.String",
+      "description": "Optional OAuth2 audience sent to the token endpoint.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.auth-style",
+      "type": "java.lang.String",
+      "description": "OAuth2 client authentication style. Values: basic-auth, form-post. Default: basic-auth.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig",
+      "defaultValue": "basic-auth"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.oauth2-client-credentials.expiry-leeway-ms",
+      "type": "java.lang.Long",
+      "description": "Milliseconds subtracted from OAuth2 expires_in before caching the access token. Default: 30000.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$OAuth2ClientCredentialsAuthConfig",
+      "defaultValue": 30000
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.aws-sig-v4.access-key-id",
+      "type": "java.lang.String",
+      "description": "AWS access key ID for type aws-sigv4.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AwsSigV4AuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.aws-sig-v4.secret-access-key",
+      "type": "java.lang.String",
+      "description": "AWS secret access key for type aws-sigv4.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AwsSigV4AuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.aws-sig-v4.session-token",
+      "type": "java.lang.String",
+      "description": "Optional AWS session token for temporary credentials.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AwsSigV4AuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.aws-sig-v4.region",
+      "type": "java.lang.String",
+      "description": "AWS SigV4 region, for example us-east-1.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AwsSigV4AuthConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].auth.aws-sig-v4.service",
+      "type": "java.lang.String",
+      "description": "AWS SigV4 service signing name, for example s3 or execute-api.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$AwsSigV4AuthConfig"
+    },
+    {
       "name": "reactive.http.clients.[name].apis",
       "type": "java.util.Map<java.lang.String,io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties.ApiConfig>",
       "description": "Optional named API definitions for @ApiRef methods. Keys are logical API names.",

@@ -1,0 +1,95 @@
+package io.github.huynhngochuyhoang.httpstarter.auth;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import reactor.test.StepVerifier;
+
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class AwsSigV4AuthProviderTest {
+
+    private static final Clock AWS_EXAMPLE_CLOCK =
+            Clock.fixed(Instant.parse("2013-05-24T00:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    void signsS3GetRequestWithAwsReferenceCredentials() {
+        AwsSigV4AuthProvider provider = AwsSigV4AuthProvider.builder()
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+                .region("us-east-1")
+                .service("s3")
+                .clock(AWS_EXAMPLE_CLOCK)
+                .build();
+
+        ClientRequest request = ClientRequest.create(
+                        HttpMethod.GET,
+                        URI.create("https://examplebucket.s3.amazonaws.com/test.txt"))
+                .header("Range", "bytes=0-9")
+                .build();
+
+        StepVerifier.create(provider.getAuth(new AuthRequest("s3-client", request)))
+                .assertNext(auth -> {
+                    assertThat(auth.getHeaders().get("x-amz-date")).isEqualTo("20130524T000000Z");
+                    assertThat(auth.getHeaders().get("x-amz-content-sha256"))
+                            .isEqualTo("e3b0c44298fc1c149afbf4c8996fb924"
+                                    + "27ae41e4649b934ca495991b7852b855");
+                    assertThat(auth.getHeaders().get("Authorization"))
+                            .isEqualTo("AWS4-HMAC-SHA256 "
+                                    + "Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,"
+                                    + "SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,"
+                                    + "Signature=67fe34c8530db585abddc51067328adfedb6e42487d2566dc7d927d6e2722900");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void signsRawRequestBodyBytes() {
+        AwsSigV4AuthProvider provider = AwsSigV4AuthProvider.builder()
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+                .region("us-east-1")
+                .service("execute-api")
+                .clock(Clock.fixed(Instant.parse("2026-05-13T12:00:00Z"), ZoneOffset.UTC))
+                .build();
+
+        byte[] rawBody = "{\"amount\":200}".getBytes(StandardCharsets.UTF_8);
+        ClientRequest request = ClientRequest.create(
+                        HttpMethod.POST,
+                        URI.create("https://abc123.execute-api.us-east-1.amazonaws.com/prod/payments"))
+                .attribute(AuthRequest.REQUEST_RAW_BODY_ATTRIBUTE, rawBody)
+                .build();
+
+        StepVerifier.create(provider.getAuth(new AuthRequest("api-client", request, rawBody)))
+                .assertNext(auth -> assertThat(auth.getHeaders().get("x-amz-content-sha256"))
+                        .isEqualTo("1cbbc951d99ac7588df0547a8abdc67f4c28a63a8d94c6a5edd5c6843f4e4c6e"))
+                .verifyComplete();
+    }
+
+    @Test
+    void builderRejectsMissingRequiredFields() {
+        assertThatIllegalArgumentException(() -> AwsSigV4AuthProvider.builder()
+                .secretAccessKey("secret").region("us-east-1").service("s3").build());
+        assertThatIllegalArgumentException(() -> AwsSigV4AuthProvider.builder()
+                .accessKeyId("key").region("us-east-1").service("s3").build());
+        assertThatIllegalArgumentException(() -> AwsSigV4AuthProvider.builder()
+                .accessKeyId("key").secretAccessKey("secret").service("s3").build());
+        assertThatIllegalArgumentException(() -> AwsSigV4AuthProvider.builder()
+                .accessKeyId("key").secretAccessKey("secret").region("us-east-1").build());
+    }
+
+    private static void assertThatIllegalArgumentException(Runnable action) {
+        try {
+            action.run();
+            throw new AssertionError("Expected IllegalArgumentException");
+        } catch (IllegalArgumentException ignored) {
+            // expected
+        }
+    }
+}

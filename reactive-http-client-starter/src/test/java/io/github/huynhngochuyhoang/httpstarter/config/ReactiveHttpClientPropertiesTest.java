@@ -33,8 +33,41 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         assertFalse(config.isLogBody());
         assertNull(config.getAuthProvider());
+        assertNull(config.getAuth());
         assertNotNull(config.getApis());
         assertTrue(config.getApis().isEmpty());
+    }
+
+    @Test
+    void shouldBindLegacyAuthProviderBeanName() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.users.auth-provider", "userServiceAuthProvider");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        ReactiveHttpClientProperties.ClientConfig config = bound.getClients().get("users");
+        assertEquals("userServiceAuthProvider", config.getAuthProvider());
+        assertNull(config.getAuth());
+        assertTrue(config.hasAuthConfigured());
+    }
+
+    @Test
+    void shouldBindObjectStyleAwsSigV4AuthConfig() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.payments.auth.type", "aws-sigv4");
+        yaml.put("reactive.http.clients.payments.auth.aws-sig-v4.access-key-id", "key");
+        yaml.put("reactive.http.clients.payments.auth.aws-sig-v4.secret-access-key", "secret");
+        yaml.put("reactive.http.clients.payments.auth.aws-sig-v4.region", "us-east-1");
+        yaml.put("reactive.http.clients.payments.auth.aws-sig-v4.service", "execute-api");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        ReactiveHttpClientProperties.ClientConfig config = bound.getClients().get("payments");
+        assertNull(config.getAuthProvider());
+        assertTrue(config.hasAuthConfigured());
+        assertEquals("aws-sigv4", config.getAuth().getType());
+        assertEquals("key", config.getAuth().getAwsSigV4().getAccessKeyId());
+        assertEquals("execute-api", config.getAuth().getAwsSigV4().getService());
     }
 
     @Test
