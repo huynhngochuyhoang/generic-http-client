@@ -73,7 +73,7 @@ Spring's `@HttpExchange` gives you declarative HTTP mapping and nothing more. **
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.14.0</version>
+  <version>1.15.0</version>
 </dependency>
 ```
 
@@ -620,8 +620,16 @@ Activation: when `opentelemetry-api` is on the classpath **and** an
 registers `OpenTelemetryHttpClientObserver`, an inbound
 `OpenTelemetryContextWebFilter` for reactive web applications, and a
 `WebClientCustomizer` that adds outbound propagation to starter-built clients.
-All are controlled by `reactive.http.observability.otel.enabled` (default
-`true`). Set it to `false` to disable without removing the dependency.
+`reactive.http.observability.otel.enabled` is the master switch (default
+`true`); setting it to `false` disables span recording, inbound context
+extraction, and outbound propagation without removing the dependency.
+
+For finer control, keep the master switch enabled and set
+`reactive.http.observability.otel.spans.enabled=false` to disable only
+`OpenTelemetryHttpClientObserver`, or
+`reactive.http.observability.otel.propagation.enabled=false` to disable only
+the inbound `OpenTelemetryContextWebFilter` and outbound propagation
+`WebClientCustomizer`.
 
 | Span field | Source |
 |---|---|
@@ -644,6 +652,10 @@ W3C propagators, inbound `traceparent` and `baggage` headers are extracted into
 Reactor `Context` and injected onto downstream `@ReactiveHttpClient` calls.
 If the outbound request already has a propagation header, the caller-supplied
 value is preserved.
+
+The outbound propagation filter is applied through a Spring `WebClientCustomizer`
+before starter per-client built-ins. Per-client `ReactiveHttpClientCustomizer`
+filters run after correlation-ID propagation, auth, and exchange logging.
 
 > ⚠️ The OTel observer registers as the only `HttpClientObserver` under
 > `@ConditionalOnMissingBean(HttpClientObserver.class)` — pulling in the OTel

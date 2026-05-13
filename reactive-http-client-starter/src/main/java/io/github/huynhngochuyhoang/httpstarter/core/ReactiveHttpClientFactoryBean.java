@@ -260,7 +260,13 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         applicationContext.getBeanProvider(ReactiveHttpClientCustomizer.class)
                 .orderedStream()
                 .filter(customizer -> customizer.supports(clientName))
-                .forEach(customizer -> customizer.customize(finalConfigured));
+                .forEach(customizer -> {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Applying ReactiveHttpClientCustomizer [{}] to client [{}] after built-in filters",
+                                customizer.getClass().getName(), clientName);
+                    }
+                    customizer.customize(finalConfigured);
+                });
 
         return configured.build();
     }
