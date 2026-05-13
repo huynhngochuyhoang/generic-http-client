@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Property-driven auth providers.** Clients can now use an object-style
+  `reactive.http.clients.<name>.auth` block for built-in auth providers while
+  keeping the legacy `auth-provider` bean-name shortcut unchanged.
+- **AWS SigV4 auth provider.** Added `AwsSigV4AuthProvider` and a built-in
+  `aws-sigv4` factory for signing requests with AWS Signature Version 4,
+  including raw request body hashing when the starter has serialized bytes for
+  auth signing.
+- **OAuth2 client-credentials auth factory.** Added the built-in
+  `oauth2-client-credentials` factory, composing
+  `OAuth2ClientCredentialsTokenProvider` with `RefreshingBearerAuthProvider`
+  from YAML configuration.
 - **Independent OpenTelemetry span and propagation toggles.** The
   `reactive-http-client-otel` module now keeps
   `reactive.http.observability.otel.enabled` as the master switch while adding

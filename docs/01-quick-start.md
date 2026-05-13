@@ -165,6 +165,13 @@ reactive:
       user-service:
         base-url: https://api.example.com
         auth-provider: userServiceAuthProvider
+        # Or use a built-in provider:
+        # auth:
+        #   type: oauth2-client-credentials
+        #   oauth2-client-credentials:
+        #     token-uri: https://auth.example.com/oauth/token
+        #     client-id: user-service
+        #     client-secret: ${USER_SERVICE_CLIENT_SECRET}
         codec-max-in-memory-size-mb: 2
         compression-enabled: false
         log-exchange: false

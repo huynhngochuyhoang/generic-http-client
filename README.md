@@ -188,7 +188,7 @@ The legacy property names `read-timeout-ms` / `write-timeout-ms` still bind for 
 
 ### 2.5.1 Outbound auth provider (per client)
 
-Each external client can map to its own `AuthProvider` bean via `auth-provider`.
+Each external client can map to its own `AuthProvider` bean via `auth-provider`, or use the object-style `auth` block for built-in providers.
 The provider returns an `AuthContext` that can inject headers and query params automatically via WebClient filter.
 For body-signing use cases (e.g. HMAC), providers should sign the raw payload bytes when available
 (`request.request().attribute(AuthRequest.REQUEST_RAW_BODY_ATTRIBUTE)`), and only fall back to `request.requestBody()` when raw bytes are absent.
@@ -223,6 +223,21 @@ For standard OAuth 2.0 client-credentials flows, the starter ships
 token-endpoint client. Compose it with `RefreshingBearerAuthProvider` for
 caching + single-in-flight-refresh:
 
+```yaml
+reactive:
+  http:
+    clients:
+      user-service:
+        base-url: https://api.example.com
+        auth:
+          type: oauth2-client-credentials
+          oauth2-client-credentials:
+            token-uri: https://auth.example.com/oauth/token
+            client-id: user-service
+            client-secret: ${USER_SERVICE_CLIENT_SECRET}
+            scope: read:users
+```
+
 ```java
 @Bean("userServiceAuthProvider")
 AuthProvider userServiceAuthProvider(WebClient.Builder builder) {
@@ -252,6 +267,24 @@ opt into form-post via `authStyle(AuthStyle.FORM_POST)`), forwards optional
 - deduplicates concurrent refresh calls (single in-flight token fetch)
 - supports cache invalidation (used by outbound auth filter to refresh and retry once on HTTP 401)
 - supports non-expiring tokens by returning `expiresAt = null`
+
+AWS SigV4 can also be configured without a custom bean:
+
+```yaml
+reactive:
+  http:
+    clients:
+      inventory-api:
+        base-url: https://abc123.execute-api.us-east-1.amazonaws.com/prod
+        auth:
+          type: aws-sigv4
+          aws-sig-v4:
+            access-key-id: ${AWS_ACCESS_KEY_ID}
+            secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+            session-token: ${AWS_SESSION_TOKEN:}
+            region: us-east-1
+            service: execute-api
+```
 
 ```java
 @Bean("hmacAuthProvider")

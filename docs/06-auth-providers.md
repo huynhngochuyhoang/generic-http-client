@@ -1,6 +1,6 @@
 # Outbound Auth Providers
 
-Every registered client can have its own `AuthProvider` bean that injects credentials into outbound requests automatically via a WebClient filter. The provider is identified by the bean name set in `reactive.http.clients.<name>.auth-provider`.
+Every registered client can have its own auth provider that injects credentials into outbound requests automatically via a WebClient filter. Use `reactive.http.clients.<name>.auth-provider` to reference a custom `AuthProvider` bean by name, or use the object-style `reactive.http.clients.<name>.auth` block for built-in providers.
 
 ---
 
@@ -88,7 +88,25 @@ new RefreshingBearerAuthProvider(
 
 ## `OAuth2ClientCredentialsTokenProvider` — standard OAuth 2.0 client credentials
 
-For standard OAuth 2.0 client-credentials flows, compose `OAuth2ClientCredentialsTokenProvider` with `RefreshingBearerAuthProvider`:
+For standard OAuth 2.0 client-credentials flows, use the built-in object-style provider:
+
+```yaml
+reactive:
+  http:
+    clients:
+      user-service:
+        base-url: https://api.example.com
+        auth:
+          type: oauth2-client-credentials
+          oauth2-client-credentials:
+            token-uri: https://auth.example.com/oauth/token
+            client-id: user-service
+            client-secret: ${USER_SERVICE_CLIENT_SECRET}
+            scope: read:users
+            auth-style: basic-auth   # or form-post
+```
+
+For manual bean wiring, compose `OAuth2ClientCredentialsTokenProvider` with `RefreshingBearerAuthProvider`:
 
 ```java
 @Bean("userServiceAuthProvider")
@@ -113,6 +131,30 @@ Supported authentication styles:
 |---|---|
 | `BASIC_AUTH` (default) | Client credentials sent as HTTP Basic auth |
 | `FORM_POST` | Client credentials sent as form-encoded body parameters |
+
+---
+
+## AWS SigV4 provider
+
+Use `type: aws-sigv4` to sign requests with AWS Signature Version 4. The provider signs the HTTP method, URI, query string, headers, and raw request body bytes when the starter has serialized them for auth.
+
+```yaml
+reactive:
+  http:
+    clients:
+      inventory-api:
+        base-url: https://abc123.execute-api.us-east-1.amazonaws.com/prod
+        auth:
+          type: aws-sigv4
+          aws-sig-v4:
+            access-key-id: ${AWS_ACCESS_KEY_ID}
+            secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+            session-token: ${AWS_SESSION_TOKEN:}
+            region: us-east-1
+            service: execute-api
+```
+
+Out of scope: SigV4a, STS assume-role flow, and pre-signed URLs.
 
 ---
 

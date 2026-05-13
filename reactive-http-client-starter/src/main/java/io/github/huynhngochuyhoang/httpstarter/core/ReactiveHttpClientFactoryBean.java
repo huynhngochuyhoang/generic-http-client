@@ -2,6 +2,7 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthProvider;
+import io.github.huynhngochuyhoang.httpstarter.auth.AuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.auth.OutboundAuthFilter;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
@@ -465,14 +466,29 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     }
 
     private AuthProvider resolveAuthProvider(String clientName, ReactiveHttpClientProperties.ClientConfig config) {
-        if (config == null || !StringUtils.hasText(config.getAuthProvider())) {
+        if (config == null || !config.hasAuthConfigured()) {
             return null;
         }
-        try {
-            return applicationContext.getBean(config.getAuthProvider(), AuthProvider.class);
-        } catch (NoSuchBeanDefinitionException ex) {
-            throw new IllegalStateException(
-                    "No AuthProvider bean named '" + config.getAuthProvider() + "' configured for client '" + clientName + "'", ex);
+        if (StringUtils.hasText(config.getAuthProvider())) {
+            try {
+                return applicationContext.getBean(config.getAuthProvider(), AuthProvider.class);
+            } catch (NoSuchBeanDefinitionException ex) {
+                throw new IllegalStateException(
+                        "No AuthProvider bean named '" + config.getAuthProvider()
+                                + "' configured for client '" + clientName + "'", ex);
+            }
         }
+
+        String type = config.getAuth().getType();
+        AuthProviderFactory factory = applicationContext.getBeanProvider(AuthProviderFactory.class)
+                .orderedStream()
+                .filter(candidate -> candidate.supports(type))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No AuthProviderFactory supports auth type '" + type + "' for client '" + clientName + "'"));
+        WebClient.Builder builder = applicationContext
+                .getBeanProvider(WebClient.Builder.class)
+                .getIfAvailable(WebClient::builder);
+        return factory.create(clientName, config.getAuth(), builder);
     }
 }

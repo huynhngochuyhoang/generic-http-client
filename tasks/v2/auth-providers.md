@@ -13,12 +13,12 @@ Suggested release: `1.15.0+`.
 
 ## Acceptance
 
-- [ ] SigV4 canonical request, string-to-sign, and final `Authorization` header match AWS reference vectors.
-- [ ] Body signing reuses cached raw body bytes captured for auth filters.
-- [ ] Builder API has validation and Javadoc.
-- [ ] Property binding tests cover string-form compatibility and object-form provider creation.
-- [ ] README and docs show OAuth2 and AWS SigV4 YAML examples.
-- [ ] `mvn test` passes.
+- [x] SigV4 canonical request, string-to-sign, and final `Authorization` header match AWS reference vectors.
+- [x] Body signing reuses cached raw body bytes captured for auth filters.
+- [x] Builder API has validation and Javadoc.
+- [x] Property binding tests cover string-form compatibility and object-form provider creation.
+- [x] README and docs show OAuth2 and AWS SigV4 YAML examples.
+- [x] `mvn test` passes.
 
 ## Out Of Scope
 

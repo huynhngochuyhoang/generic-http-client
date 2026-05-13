@@ -341,6 +341,11 @@ public class ReactiveHttpClientProperties {
          * Empty means no automatic auth injection.
          */
         private String authProvider;
+        /**
+         * Object-style auth-provider configuration. When set, this is used only
+         * if {@link #authProvider} is blank.
+         */
+        private AuthConfig auth;
         private ResilienceConfig resilience = new ResilienceConfig();
         /**
          * Optional named API definitions used by {@code @ApiRef}.
@@ -400,6 +405,14 @@ public class ReactiveHttpClientProperties {
         public String getAuthProvider() { return authProvider; }
         public void setAuthProvider(String authProvider) { this.authProvider = authProvider; }
 
+        public AuthConfig getAuth() { return auth; }
+        public void setAuth(AuthConfig auth) { this.auth = auth; }
+
+        public boolean hasAuthConfigured() {
+            return org.springframework.util.StringUtils.hasText(authProvider)
+                    || (auth != null && org.springframework.util.StringUtils.hasText(auth.getType()));
+        }
+
         public ResilienceConfig getResilience() { return resilience; }
         public void setResilience(ResilienceConfig resilience) { this.resilience = resilience; }
 
@@ -416,6 +429,81 @@ public class ReactiveHttpClientProperties {
 
         public TlsConfig getTls() { return tls; }
         public void setTls(TlsConfig tls) { this.tls = tls; }
+    }
+
+    public static class AuthConfig {
+        private String type;
+        private OAuth2ClientCredentialsAuthConfig oauth2ClientCredentials = new OAuth2ClientCredentialsAuthConfig();
+        private AwsSigV4AuthConfig awsSigV4 = new AwsSigV4AuthConfig();
+
+        public String getType() { return type; }
+        public void setType(String type) { this.type = type; }
+
+        public OAuth2ClientCredentialsAuthConfig getOauth2ClientCredentials() { return oauth2ClientCredentials; }
+        public void setOauth2ClientCredentials(OAuth2ClientCredentialsAuthConfig oauth2ClientCredentials) {
+            this.oauth2ClientCredentials = oauth2ClientCredentials != null
+                    ? oauth2ClientCredentials
+                    : new OAuth2ClientCredentialsAuthConfig();
+        }
+
+        public AwsSigV4AuthConfig getAwsSigV4() { return awsSigV4; }
+        public void setAwsSigV4(AwsSigV4AuthConfig awsSigV4) {
+            this.awsSigV4 = awsSigV4 != null ? awsSigV4 : new AwsSigV4AuthConfig();
+        }
+    }
+
+    public static class OAuth2ClientCredentialsAuthConfig {
+        private String tokenUri;
+        private String clientId;
+        private String clientSecret;
+        private String scope;
+        private String audience;
+        private String authStyle;
+        private long expiryLeewayMs = 30_000;
+
+        public String getTokenUri() { return tokenUri; }
+        public void setTokenUri(String tokenUri) { this.tokenUri = tokenUri; }
+
+        public String getClientId() { return clientId; }
+        public void setClientId(String clientId) { this.clientId = clientId; }
+
+        public String getClientSecret() { return clientSecret; }
+        public void setClientSecret(String clientSecret) { this.clientSecret = clientSecret; }
+
+        public String getScope() { return scope; }
+        public void setScope(String scope) { this.scope = scope; }
+
+        public String getAudience() { return audience; }
+        public void setAudience(String audience) { this.audience = audience; }
+
+        public String getAuthStyle() { return authStyle; }
+        public void setAuthStyle(String authStyle) { this.authStyle = authStyle; }
+
+        public long getExpiryLeewayMs() { return expiryLeewayMs; }
+        public void setExpiryLeewayMs(long expiryLeewayMs) { this.expiryLeewayMs = expiryLeewayMs; }
+    }
+
+    public static class AwsSigV4AuthConfig {
+        private String accessKeyId;
+        private String secretAccessKey;
+        private String sessionToken;
+        private String region;
+        private String service;
+
+        public String getAccessKeyId() { return accessKeyId; }
+        public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
+
+        public String getSecretAccessKey() { return secretAccessKey; }
+        public void setSecretAccessKey(String secretAccessKey) { this.secretAccessKey = secretAccessKey; }
+
+        public String getSessionToken() { return sessionToken; }
+        public void setSessionToken(String sessionToken) { this.sessionToken = sessionToken; }
+
+        public String getRegion() { return region; }
+        public void setRegion(String region) { this.region = region; }
+
+        public String getService() { return service; }
+        public void setService(String service) { this.service = service; }
     }
 
     public static class ApiConfig {

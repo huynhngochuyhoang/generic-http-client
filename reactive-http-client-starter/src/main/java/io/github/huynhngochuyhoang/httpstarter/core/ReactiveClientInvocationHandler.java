@@ -576,7 +576,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (body == null) {
             return Mono.just(new SerializedRequestBody(null, null, null));
         }
-        if (!StringUtils.hasText(clientConfig.getAuthProvider())) {
+        if (!clientConfig.hasAuthConfigured()) {
             return Mono.just(new SerializedRequestBody(body, body, null));
         }
         if (body instanceof byte[] bytes) {
