@@ -189,10 +189,14 @@ public final class AwsSigV4AuthProvider implements AuthProvider {
     private static String uriEncode(String value, boolean preserveSlash) {
         StringBuilder out = new StringBuilder();
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        for (byte raw : bytes) {
-            int b = raw & 0xff;
+        for (int i = 0; i < bytes.length; i++) {
+            int b = bytes[i] & 0xff;
             char c = (char) b;
-            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+            if (c == '%' && i + 2 < bytes.length && isHex(bytes[i + 1]) && isHex(bytes[i + 2])) {
+                out.append('%')
+                        .append(Character.toUpperCase((char) bytes[++i]))
+                        .append(Character.toUpperCase((char) bytes[++i]));
+            } else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
                     || c == '-' || c == '_' || c == '.' || c == '~' || (preserveSlash && c == '/')) {
                 out.append(c);
             } else {
@@ -203,6 +207,12 @@ public final class AwsSigV4AuthProvider implements AuthProvider {
             }
         }
         return out.toString();
+    }
+
+    private static boolean isHex(byte value) {
+        return (value >= '0' && value <= '9')
+                || (value >= 'A' && value <= 'F')
+                || (value >= 'a' && value <= 'f');
     }
 
     private static byte[] hmac(byte[] key, String data) {

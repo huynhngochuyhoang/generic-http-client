@@ -73,6 +73,30 @@ class AwsSigV4AuthProviderTest {
     }
 
     @Test
+    void signsAlreadyEncodedPathAndQueryWithoutDoubleEncoding() {
+        AwsSigV4AuthProvider provider = AwsSigV4AuthProvider.builder()
+                .accessKeyId("AKIAIOSFODNN7EXAMPLE")
+                .secretAccessKey("wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+                .region("us-east-1")
+                .service("execute-api")
+                .clock(Clock.fixed(Instant.parse("2026-05-13T12:00:00Z"), ZoneOffset.UTC))
+                .build();
+
+        ClientRequest request = ClientRequest.create(
+                        HttpMethod.GET,
+                        URI.create("https://example.amazonaws.com/photos/my%20cat/%E2%9C%93?prefix=foo%2Fbar&q=white%20space"))
+                .build();
+
+        StepVerifier.create(provider.getAuth(new AuthRequest("api-client", request)))
+                .assertNext(auth -> assertThat(auth.getHeaders().get("Authorization"))
+                        .isEqualTo("AWS4-HMAC-SHA256 "
+                                + "Credential=AKIAIOSFODNN7EXAMPLE/20260513/us-east-1/execute-api/aws4_request,"
+                                + "SignedHeaders=host;x-amz-content-sha256;x-amz-date,"
+                                + "Signature=5d21b737b971229bc326fe4f62e842ebe78f0bbd5735529f706fcb4357b8dc77"))
+                .verifyComplete();
+    }
+
+    @Test
     void builderRejectsMissingRequiredFields() {
         assertThatIllegalArgumentException(() -> AwsSigV4AuthProvider.builder()
                 .secretAccessKey("secret").region("us-east-1").service("s3").build());
