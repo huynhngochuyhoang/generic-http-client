@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 /**
  * Auto-configuration that registers an {@link OpenTelemetryHttpClientObserver}
@@ -17,10 +18,12 @@ import org.springframework.context.annotation.Bean;
  * bean is available in the context, and no other {@link HttpClientObserver}
  * has been registered.
  *
- * <p>Activated under property
- * {@code reactive.http.observability.otel.enabled} (default {@code true} when
- * the OTel API is present). Set to {@code false} to disable the observer
- * without removing the dependency.
+ * <p>Activated under property {@code reactive.http.observability.otel.enabled}
+ * (default {@code true} when the OTel API is present). Set to {@code false} to
+ * disable all OTel observer and propagation beans without removing the dependency.
+ * Use {@code reactive.http.observability.otel.spans.enabled=false} or
+ * {@code reactive.http.observability.otel.propagation.enabled=false} to disable
+ * either behavior independently while keeping the other one active.
  */
 @AutoConfiguration
 @ConditionalOnClass(OpenTelemetry.class)
@@ -32,34 +35,52 @@ import org.springframework.context.annotation.Bean;
         matchIfMissing = true)
 public class OpenTelemetryHttpClientAutoConfiguration {
 
-    @Bean(name = "openTelemetryHttpClientObserver")
-    @ConditionalOnMissingBean(HttpClientObserver.class)
-    public HttpClientObserver openTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
-        return new OpenTelemetryHttpClientObserver(openTelemetry);
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(
+            prefix = "reactive.http.observability.otel.spans",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    static class SpanConfiguration {
+
+        @Bean(name = "openTelemetryHttpClientObserver")
+        @ConditionalOnMissingBean(HttpClientObserver.class)
+        HttpClientObserver openTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
+            return new OpenTelemetryHttpClientObserver(openTelemetry);
+        }
     }
 
-    /**
-     * Server-side {@link OpenTelemetryContextWebFilter} that captures inbound
-     * trace context + baggage into the Reactor {@link reactor.util.context.Context}.
-     * Active only in reactive web applications.
-     */
-    @Bean
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
-    @ConditionalOnMissingBean(OpenTelemetryContextWebFilter.class)
-    public OpenTelemetryContextWebFilter openTelemetryContextWebFilter(OpenTelemetry openTelemetry) {
-        return new OpenTelemetryContextWebFilter(openTelemetry);
-    }
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(
+            prefix = "reactive.http.observability.otel.propagation",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    static class PropagationConfiguration {
 
-    /**
-     * Adds an outbound {@link OpenTelemetryContextExchangeFilter} to every
-     * starter-built {@code WebClient} so the captured OTel context (or
-     * {@link io.opentelemetry.context.Context#current()} as fallback) is
-     * injected onto downstream requests as {@code traceparent} / {@code baggage}
-     * / any other configured propagation headers.
-     */
-    @Bean(name = "openTelemetryContextWebClientCustomizer")
-    @ConditionalOnMissingBean(name = "openTelemetryContextWebClientCustomizer")
-    public WebClientCustomizer openTelemetryContextWebClientCustomizer(OpenTelemetry openTelemetry) {
-        return builder -> builder.filter(OpenTelemetryContextExchangeFilter.create(openTelemetry));
+        /**
+         * Server-side {@link OpenTelemetryContextWebFilter} that captures inbound
+         * trace context + baggage into the Reactor {@link reactor.util.context.Context}.
+         * Active only in reactive web applications.
+         */
+        @Bean
+        @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+        @ConditionalOnMissingBean(OpenTelemetryContextWebFilter.class)
+        OpenTelemetryContextWebFilter openTelemetryContextWebFilter(OpenTelemetry openTelemetry) {
+            return new OpenTelemetryContextWebFilter(openTelemetry);
+        }
+
+        /**
+         * Adds an outbound {@link OpenTelemetryContextExchangeFilter} to every
+         * starter-built {@code WebClient} so the captured OTel context (or
+         * {@link io.opentelemetry.context.Context#current()} as fallback) is
+         * injected onto downstream requests as {@code traceparent} / {@code baggage}
+         * / any other configured propagation headers.
+         */
+        @Bean(name = "openTelemetryContextWebClientCustomizer")
+        @ConditionalOnMissingBean(name = "openTelemetryContextWebClientCustomizer")
+        WebClientCustomizer openTelemetryContextWebClientCustomizer(OpenTelemetry openTelemetry) {
+            return builder -> builder.filter(OpenTelemetryContextExchangeFilter.create(openTelemetry));
+        }
     }
 }

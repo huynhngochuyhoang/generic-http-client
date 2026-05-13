@@ -3,12 +3,18 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
 import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.annotation.Order;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
@@ -30,6 +36,7 @@ import static org.mockito.Mockito.when;
  * Tests for {@link ReactiveHttpClientCustomizer} — both the interface contract
  * and integration with {@link ReactiveHttpClientFactoryBean}.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class ReactiveHttpClientCustomizerTest {
 
     // ---- Interface contract ------------------------------------------------
@@ -131,6 +138,26 @@ class ReactiveHttpClientCustomizerTest {
             assertEquals(List.of("order-1", "order-2", "order-3"), invocationOrder,
                     "Customizers must be applied in @Order-sorted sequence");
         } finally {
+            factoryBean.destroy();
+        }
+    }
+
+    @Test
+    void factoryBean_debugDiagnosticsListAppliedCustomizersPerClient(CapturedOutput output) throws Exception {
+        List<String> invocationOrder = new ArrayList<>();
+        ReactiveHttpClientCustomizer customizer = new Order1Customizer(invocationOrder);
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.DEBUG);
+
+        ReactiveHttpClientFactoryBean<PingClient> factoryBean = buildFactoryBean(List.of(customizer));
+        try {
+            factoryBean.getObject();
+            assertTrue(output.getOut().contains("Applying ReactiveHttpClientCustomizer"));
+            assertTrue(output.getOut().contains(Order1Customizer.class.getName()));
+            assertTrue(output.getOut().contains("test-client"));
+        } finally {
+            logger.setLevel(previousLevel);
             factoryBean.destroy();
         }
     }

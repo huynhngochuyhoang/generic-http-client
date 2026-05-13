@@ -15,6 +15,8 @@ import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -50,12 +52,20 @@ import org.springframework.web.reactive.function.client.WebClient;
 @EnableConfigurationProperties(ReactiveHttpClientProperties.class)
 public class ReactiveHttpClientAutoConfiguration {
 
+    private static final Logger log = LoggerFactory.getLogger(ReactiveHttpClientAutoConfiguration.class);
+
     @Bean
     @Scope("prototype")
     @ConditionalOnMissingBean
     public WebClient.Builder starterWebClientBuilder(ObjectProvider<WebClientCustomizer> customizerProvider) {
         WebClient.Builder builder = WebClient.builder();
-        customizerProvider.orderedStream().forEach(customizer -> customizer.customize(builder));
+        customizerProvider.orderedStream().forEach(customizer -> {
+            if (log.isDebugEnabled()) {
+                log.debug("Applying WebClientCustomizer [{}] to starter WebClient.Builder",
+                        customizer.getClass().getName());
+            }
+            customizer.customize(builder);
+        });
         return builder;
     }
 

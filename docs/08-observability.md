@@ -177,6 +177,22 @@ reactive:
         enabled: false
 ```
 
+`reactive.http.observability.otel.enabled=false` is the master switch and disables
+all OTel beans from this module: span recording, inbound context extraction, and
+outbound propagation. Leave the master switch enabled and use the child switches
+when you need only one side:
+
+```yaml
+reactive:
+  http:
+    observability:
+      otel:
+        spans:
+          enabled: false        # disables OpenTelemetryHttpClientObserver only
+        propagation:
+          enabled: false        # disables inbound/outbound propagation only
+```
+
 ### Span fields
 
 | Field | Source |
@@ -213,6 +229,11 @@ OpenTelemetry openTelemetry() {
 ```
 
 The outbound filter falls back to `io.opentelemetry.context.Context.current()` when no Reactor context entry exists, so calls made inside a manually scoped OTel context still propagate. Caller-supplied headers win: if a request already has `traceparent`, `baggage`, or another propagator header, the filter leaves that value untouched.
+
+The outbound propagation filter is added through a Spring `WebClientCustomizer`
+before starter per-client built-ins. Per-client `ReactiveHttpClientCustomizer`
+filters run later, after correlation ID, auth, and exchange logging have been
+wired.
 
 ### Mutual exclusion with Micrometer
 

@@ -12,8 +12,8 @@ Roadmap bucket: `2. Features to optimize`.
   - Move stable invocation decisions out of the hot path.
   - Keep dynamic argument resolution separate.
   - Preserve `@ApiRef` diagnostics.
-- [ ] **2.3 Improve diagnostics for auto-configured filter order**
-  - DEBUG-log applied `WebClientCustomizer` classes per client.
+- [x] **2.3 Improve diagnostics for auto-configured filter order**
+  - DEBUG-log applied `WebClientCustomizer` classes per builder and `ReactiveHttpClientCustomizer` classes per client.
   - Document built-in filter order.
   - Test OTel/header preservation and customizer ordering.
 - [ ] **2.4 Documentation and examples package**

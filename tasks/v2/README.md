@@ -14,6 +14,7 @@ Current baseline: `v1.14.0` (2026-05-12).
 | [Observability deepening](observability-deepening.md) | 1.3, 2.1, 3.4 | `1.15.0+` or `2.0.0` | Composite observer plus `server.address` |
 | [TLS integration tests](tls-integration-tests.md) | 3.1 | no version impact | Test-only hardening |
 | [2.0 cleanup](2.0-cleanup.md) | 3.2 | `2.0.0` | Remove deprecated `log-body` compatibility |
+| [Execution order](execution-order.md) | suggested order | n/a | Roadmap implementation sequence |
 
 ## Working Rules
 

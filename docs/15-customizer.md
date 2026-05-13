@@ -16,9 +16,17 @@ During proxy construction, `ReactiveHttpClientFactoryBean` will:
 2. Call `supports(clientName)` on each one.
 3. Apply `customize(builder)` on every customizer that returned `true`.
 
-Customizers run **after** all built-in filters (correlation-ID propagation, outbound
-auth, exchange logging) are wired, so custom filters added here sit at the outermost
-position in the filter chain.
+Spring `WebClientCustomizer` beans run first when the starter creates its
+prototype `WebClient.Builder`. Optional companion modules, including
+`reactive-http-client-otel`, use that hook to add global filters such as OTel
+outbound propagation.
+
+Per-client `ReactiveHttpClientCustomizer` beans run **after** starter per-client
+filters (correlation-ID propagation, outbound auth, exchange logging) are wired,
+so custom filters added here sit at the outermost position in the filter chain.
+
+At DEBUG level, the starter logs the applied `WebClientCustomizer` classes and the
+per-client `ReactiveHttpClientCustomizer` classes in execution order.
 
 ---
 

@@ -12,7 +12,7 @@ Roadmap bucket: `3. Bugs / correctness to fix`.
   - Hold for `2.0.0`.
   - Remove property, metadata, and compatibility branch.
   - Add migration note.
-- [ ] **3.3 Verify OTel propagation disable semantics**
+- [x] **3.3 Verify OTel propagation disable semantics**
   - Decide whether span and propagation toggles should be separate.
   - Test disabled observer, disabled propagation, and default behavior.
   - Document exactly what each switch controls.

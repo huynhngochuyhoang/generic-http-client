@@ -127,6 +127,7 @@ class OpenTelemetryContextPropagationTest {
         // Caller pre-sets a baggage header; propagator must not overwrite it
         Mono<Void> call = webClient.get().uri("/users")
                 .header("baggage", "preset=caller")
+                .header("traceparent", "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01")
                 .retrieve().bodyToMono(Void.class)
                 .contextWrite(ctx -> ctx.put(
                         OpenTelemetryContextWebFilter.OTEL_CONTEXT_KEY, contextWithBaggage));
@@ -136,6 +137,9 @@ class OpenTelemetryContextPropagationTest {
         assertThat(captured.get().headers().getFirst("baggage"))
                 .as("caller-supplied baggage must win over propagated baggage")
                 .isEqualTo("preset=caller");
+        assertThat(captured.get().headers().getFirst("traceparent"))
+                .as("caller-supplied traceparent must win over propagated trace context")
+                .isEqualTo("00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01");
     }
 
     @Test

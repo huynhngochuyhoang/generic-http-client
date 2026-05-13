@@ -1,5 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.config;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
@@ -10,7 +12,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -32,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (roadmap item 3.9), and that the prototype scope introduced in 1.8.1 still produces
  * distinct builder instances per pull (no filter state sharing).
  */
+@ExtendWith(OutputCaptureExtension.class)
 class ReactiveHttpClientAutoConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -94,6 +101,23 @@ class ReactiveHttpClientAutoConfigurationTest {
                             .as("WebClientCustomizer beans must be applied in @Order sequence")
                             .containsExactly("first", "second", "third");
                 });
+    }
+
+    @Test
+    void debugDiagnosticsListAppliedWebClientCustomizers(CapturedOutput output) {
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveHttpClientAutoConfiguration.class);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.DEBUG);
+        try {
+            runner.withUserConfiguration(OrderedCustomizersConfig.class)
+                    .run(context -> context.getBean(WebClient.Builder.class));
+
+            assertThat(output.getOut())
+                    .contains("Applying WebClientCustomizer")
+                    .contains(OrderedCustomizersConfig.class.getName());
+        } finally {
+            logger.setLevel(previousLevel);
+        }
     }
 
     // -------------------------------------------------------------------------

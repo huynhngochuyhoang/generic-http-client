@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.15.0] – 2026-05-13
+
+### Added
+
+- **Independent OpenTelemetry span and propagation toggles.** The
+  `reactive-http-client-otel` module now keeps
+  `reactive.http.observability.otel.enabled` as the master switch while adding
+  `reactive.http.observability.otel.spans.enabled` and
+  `reactive.http.observability.otel.propagation.enabled` for finer control.
+  This lets applications disable span recording while keeping propagation, or
+  disable propagation while keeping outbound span recording.
+- **Filter-order DEBUG diagnostics.** Starter-created `WebClient.Builder`
+  instances now DEBUG-log applied Spring `WebClientCustomizer` classes, and
+  per-client proxy creation DEBUG-logs applied `ReactiveHttpClientCustomizer`
+  classes after built-in filters are wired.
+
+### Changed
+
+- **Documented OTel switch semantics and filter order.** README and docs now
+  state exactly what the OTel master switch controls, how the child toggles
+  behave, and where global `WebClientCustomizer` filters and per-client
+  `ReactiveHttpClientCustomizer` filters sit relative to built-ins.
+- **Expanded OTel header-preservation coverage.** Propagation tests now verify
+  caller-supplied `traceparent` headers are preserved alongside `baggage`.
+
+---
+
 ## [1.14.0] – 2026-05-12
 
 ### Added
