@@ -234,6 +234,14 @@ Mono<User> getUser(@PathVar("id") long id);
 Mono<User> createUser(@Body NewUser body);
 ```
 
-Per-method annotations take precedence over `resilience.retry` / `.circuit-breaker` / `.bulkhead`. The starter validates all referenced instances at proxy-construction time and fails fast with a descriptive `IllegalStateException` for every missing instance, so typos cannot silently fall back to a default-configured instance.
+### `@RateLimiter`
+
+```java
+@POST("/users")
+@RateLimiter("user-write-rate-limiter")
+Mono<User> createUser(@Body NewUser body);
+```
+
+Per-method annotations take precedence over `resilience.retry` / `.rate-limiter` / `.circuit-breaker` / `.bulkhead`. The starter validates all referenced instances at proxy-construction time and fails fast with a descriptive `IllegalStateException` for every missing instance, so typos cannot silently fall back to a default-configured instance.
 
 See [07-resilience4j.md](07-resilience4j.md) for full usage and configuration.

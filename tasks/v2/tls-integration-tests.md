@@ -12,8 +12,8 @@ Suggested release: no version impact unless published with other changes.
 
 ## Acceptance
 
-- [ ] Happy-path request succeeds against a trusted self-signed peer.
-- [ ] Negative test fails with TLS handshake error when the peer certificate is not trusted.
-- [ ] Tests are fully local and network-free.
-- [ ] Tests complete in under 5 seconds on normal CI hardware.
-- [ ] `mvn test` passes.
+- [x] Happy-path request succeeds against a trusted self-signed peer.
+- [x] Negative test fails with TLS handshake error when the peer certificate is not trusted.
+- [x] Tests are fully local and network-free.
+- [x] Tests complete in under 5 seconds on normal CI hardware.
+- [x] `mvn test` passes.

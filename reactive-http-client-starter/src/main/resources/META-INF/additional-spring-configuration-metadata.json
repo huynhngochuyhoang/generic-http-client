@@ -434,6 +434,13 @@
       "defaultValue": "default"
     },
     {
+      "name": "reactive.http.clients.[name].resilience.rate-limiter",
+      "type": "java.lang.String",
+      "description": "Name of the Resilience4j RateLimiter instance from application config. Default: default.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ResilienceConfig",
+      "defaultValue": "default"
+    },
+    {
       "name": "reactive.http.clients.[name].resilience.timeout-ms",
       "type": "java.lang.Long",
       "description": "Per-request response timeout in milliseconds applied via HttpClientRequest.responseTimeout(). 0 disables the timeout. Default: 0.",

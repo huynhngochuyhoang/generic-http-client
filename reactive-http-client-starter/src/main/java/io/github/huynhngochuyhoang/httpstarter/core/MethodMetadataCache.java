@@ -201,6 +201,11 @@ public class MethodMetadataCache {
             requireNonBlankAnnotationValue(bulkhead.value(), "@Bulkhead", method);
             meta.setBulkheadInstanceName(bulkhead.value());
         }
+        RateLimiter rateLimiter = method.getAnnotation(RateLimiter.class);
+        if (rateLimiter != null) {
+            requireNonBlankAnnotationValue(rateLimiter.value(), "@RateLimiter", method);
+            meta.setRateLimiterInstanceName(rateLimiter.value());
+        }
 
         meta.freezeCollections();
         return meta;

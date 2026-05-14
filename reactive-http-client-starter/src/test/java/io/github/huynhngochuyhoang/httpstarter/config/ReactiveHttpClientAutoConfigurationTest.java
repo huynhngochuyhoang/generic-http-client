@@ -8,7 +8,9 @@ import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRateLimiterMetrics;
 import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
@@ -196,13 +198,16 @@ class ReactiveHttpClientAutoConfigurationTest {
                     assertThat(binders).containsKeys(
                             "reactiveHttpCircuitBreakerMeterBinder",
                             "reactiveHttpRetryMeterBinder",
-                            "reactiveHttpBulkheadMeterBinder");
+                            "reactiveHttpBulkheadMeterBinder",
+                            "reactiveHttpRateLimiterMeterBinder");
                     assertThat(binders.get("reactiveHttpCircuitBreakerMeterBinder"))
                             .isInstanceOf(TaggedCircuitBreakerMetrics.class);
                     assertThat(binders.get("reactiveHttpRetryMeterBinder"))
                             .isInstanceOf(TaggedRetryMetrics.class);
                     assertThat(binders.get("reactiveHttpBulkheadMeterBinder"))
                             .isInstanceOf(TaggedBulkheadMetrics.class);
+                    assertThat(binders.get("reactiveHttpRateLimiterMeterBinder"))
+                            .isInstanceOf(TaggedRateLimiterMetrics.class);
                 });
     }
 
@@ -215,7 +220,8 @@ class ReactiveHttpClientAutoConfigurationTest {
                     assertThat(binders).doesNotContainKeys(
                             "reactiveHttpCircuitBreakerMeterBinder",
                             "reactiveHttpRetryMeterBinder",
-                            "reactiveHttpBulkheadMeterBinder");
+                            "reactiveHttpBulkheadMeterBinder",
+                            "reactiveHttpRateLimiterMeterBinder");
                 });
     }
 
@@ -256,6 +262,11 @@ class ReactiveHttpClientAutoConfigurationTest {
         @Bean
         BulkheadRegistry bulkheadRegistry() {
             return BulkheadRegistry.ofDefaults();
+        }
+
+        @Bean
+        RateLimiterRegistry rateLimiterRegistry() {
+            return RateLimiterRegistry.ofDefaults();
         }
     }
 

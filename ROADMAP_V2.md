@@ -206,10 +206,10 @@ partner APIs with strict quotas.
 
 **Acceptance bar:**
 
-- [ ] Optional Resilience4j rate-limiter integration.
-- [ ] Client-level and method-level instance selection.
-- [ ] Tests cover missing registry, configured registry, and per-method override.
-- [ ] Docs explain operator ordering relative to retry/circuit-breaker/bulkhead.
+- [x] Optional Resilience4j rate-limiter integration.
+- [x] Client-level and method-level instance selection.
+- [x] Tests cover missing registry, configured registry, and per-method override.
+- [x] Docs explain operator ordering relative to retry/circuit-breaker/bulkhead.
 
 ---
 
@@ -309,11 +309,11 @@ OTel propagation, multipart, streaming, and test helpers.
 
 **Acceptance bar:**
 
-- [ ] Add minimal examples under `docs/examples/` or a compileable `examples/`
+- [x] Add minimal examples under `docs/examples/` or a compileable `examples/`
       module.
-- [ ] Include OTel trace context + baggage propagation.
-- [ ] Include test-helper usage without a live server.
-- [ ] Decide whether examples compile in CI or are clearly marked snippets.
+- [x] Include OTel trace context + baggage propagation.
+- [x] Include test-helper usage without a live server.
+- [x] Decide whether examples compile in CI or are clearly marked snippets.
 
 ---
 

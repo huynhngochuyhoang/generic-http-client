@@ -4,6 +4,8 @@ import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.junit.jupiter.api.Nested;
@@ -68,6 +70,20 @@ class ResilienceOperatorApplierTest {
         }
 
         @Test
+        void rateLimiterMono_passesThroughValue() {
+            StepVerifier.create(applier.applyRateLimiter(Mono.just("ok"), "rl"))
+                    .expectNext("ok")
+                    .verifyComplete();
+        }
+
+        @Test
+        void rateLimiterFlux_passesThroughValues() {
+            StepVerifier.create(applier.applyRateLimiter(Flux.just("x"), "rl"))
+                    .expectNext("x")
+                    .verifyComplete();
+        }
+
+        @Test
         void circuitBreakerMono_propagatesError() {
             StepVerifier.create(applier.applyCircuitBreaker(Mono.error(new RuntimeException("boom")), "cb"))
                     .expectErrorMessage("boom")
@@ -87,6 +103,13 @@ class ResilienceOperatorApplierTest {
                     .expectErrorMessage("err")
                     .verify();
         }
+
+        @Test
+        void rateLimiterMono_propagatesError() {
+            StepVerifier.create(applier.applyRateLimiter(Mono.error(new RuntimeException("err")), "rl"))
+                    .expectErrorMessage("err")
+                    .verify();
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -102,9 +125,11 @@ class ResilienceOperatorApplierTest {
                 RetryRegistry.of(RetryConfig.custom().maxAttempts(1).build());
         private final BulkheadRegistry bulkheadRegistry =
                 BulkheadRegistry.of(BulkheadConfig.ofDefaults());
+        private final RateLimiterRegistry rateLimiterRegistry =
+                RateLimiterRegistry.of(RateLimiterConfig.ofDefaults());
 
         private final ResilienceOperatorApplier applier =
-                new Resilience4jOperatorApplier(cbRegistry, retryRegistry, bulkheadRegistry);
+                new Resilience4jOperatorApplier(cbRegistry, retryRegistry, bulkheadRegistry, rateLimiterRegistry);
 
         @Test
         void circuitBreakerMono_allowsSuccessfulCall() {
@@ -149,6 +174,20 @@ class ResilienceOperatorApplierTest {
         }
 
         @Test
+        void rateLimiterMono_allowsSuccessfulCall() {
+            StepVerifier.create(applier.applyRateLimiter(Mono.just("ok"), "test"))
+                    .expectNext("ok")
+                    .verifyComplete();
+        }
+
+        @Test
+        void rateLimiterFlux_allowsSuccessfulCall() {
+            StepVerifier.create(applier.applyRateLimiter(Flux.just("x"), "test"))
+                    .expectNext("x")
+                    .verifyComplete();
+        }
+
+        @Test
         void circuitBreakerMono_propagatesErrorAndRecordsFailure() {
             StepVerifier.create(applier.applyCircuitBreaker(
                             Mono.error(new RuntimeException("downstream")), "test"))
@@ -171,10 +210,27 @@ class ResilienceOperatorApplierTest {
             saturated.bulkhead("full").tryAcquirePermission();
 
             ResilienceOperatorApplier limited =
-                    new Resilience4jOperatorApplier(null, null, saturated);
+                    new Resilience4jOperatorApplier(null, null, saturated, null);
 
             StepVerifier.create(limited.applyBulkhead(Mono.just("x"), "full"))
                     .expectError(io.github.resilience4j.bulkhead.BulkheadFullException.class)
+                    .verify();
+        }
+
+        @Test
+        void rateLimiterRejectsWhenPermissionUnavailable() {
+            RateLimiterRegistry limited = RateLimiterRegistry.of(RateLimiterConfig.custom()
+                    .limitForPeriod(1)
+                    .limitRefreshPeriod(Duration.ofSeconds(10))
+                    .timeoutDuration(Duration.ZERO)
+                    .build());
+            limited.rateLimiter("limited").acquirePermission();
+
+            ResilienceOperatorApplier applier =
+                    new Resilience4jOperatorApplier(null, null, null, limited);
+
+            StepVerifier.create(applier.applyRateLimiter(Mono.just("x"), "limited"))
+                    .expectError(io.github.resilience4j.ratelimiter.RequestNotPermitted.class)
                     .verify();
         }
     }
@@ -187,7 +243,7 @@ class ResilienceOperatorApplierTest {
     class Resilience4jApplierNullRegistries {
 
         private final ResilienceOperatorApplier applier =
-                new Resilience4jOperatorApplier(null, null, null);
+                new Resilience4jOperatorApplier(null, null, null, null);
 
         @Test
         void circuitBreakerMono_passesThroughWhenRegistryNull() {
@@ -232,9 +288,23 @@ class ResilienceOperatorApplierTest {
         }
 
         @Test
+        void rateLimiterMono_passesThroughWhenRegistryNull() {
+            StepVerifier.create(applier.applyRateLimiter(Mono.just("ok"), "rl"))
+                    .expectNext("ok")
+                    .verifyComplete();
+        }
+
+        @Test
+        void rateLimiterFlux_passesThroughWhenRegistryNull() {
+            StepVerifier.create(applier.applyRateLimiter(Flux.just("x"), "rl"))
+                    .expectNext("x")
+                    .verifyComplete();
+        }
+
+        @Test
         void nonResistance4jObjectsAreIgnored() {
             ResilienceOperatorApplier withGarbage =
-                    new Resilience4jOperatorApplier("not-a-registry", 42, new Object());
+                    new Resilience4jOperatorApplier("not-a-registry", 42, new Object(), "nope");
 
             StepVerifier.create(withGarbage.applyCircuitBreaker(Mono.just("ok"), "cb"))
                     .expectNext("ok")

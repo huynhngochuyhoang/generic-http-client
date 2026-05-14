@@ -20,7 +20,7 @@ Roadmap bucket: `1. Features to add`.
   - Add annotation + extension.
   - Decide artifact/dependency boundary.
   - Add docs and consuming tests.
-- [ ] **1.5 Resilience4j rate-limiter support**
+- [x] **1.5 Resilience4j rate-limiter support**
   - Add optional rate-limiter operator support.
   - Add method-level and client-level configuration.
   - Document operator ordering.

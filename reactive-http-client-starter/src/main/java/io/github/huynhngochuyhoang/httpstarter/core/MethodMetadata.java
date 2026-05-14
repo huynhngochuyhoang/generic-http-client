@@ -57,6 +57,7 @@ public class MethodMetadata {
     private String retryInstanceName;
     private String circuitBreakerInstanceName;
     private String bulkheadInstanceName;
+    private String rateLimiterInstanceName;
 
     /**
      * Resolved {@link HttpExchangeLogger} instance cached after first resolution.
@@ -132,6 +133,11 @@ public class MethodMetadata {
     public String getBulkheadInstanceName() { return bulkheadInstanceName; }
     public void setBulkheadInstanceName(String bulkheadInstanceName) {
         this.bulkheadInstanceName = bulkheadInstanceName;
+    }
+
+    public String getRateLimiterInstanceName() { return rateLimiterInstanceName; }
+    public void setRateLimiterInstanceName(String rateLimiterInstanceName) {
+        this.rateLimiterInstanceName = rateLimiterInstanceName;
     }
 
     /**

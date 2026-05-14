@@ -14,9 +14,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -92,7 +92,7 @@ class ReactiveClientInvocationHandlerRetryMethodsTest {
                 config,
                 "test-client",
                 appCtx,
-                new Resilience4jOperatorApplier(null, RetryRegistry.of(retryConfig), null),
+                new Resilience4jOperatorApplier(null, RetryRegistry.of(retryConfig), null, null),
                 null,
                 new ReactiveHttpClientProperties.ObservabilityConfig()
         );

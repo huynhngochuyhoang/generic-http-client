@@ -2,8 +2,10 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.reactor.bulkhead.operator.BulkheadOperator;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
+import io.github.resilience4j.reactor.ratelimiter.operator.RateLimiterOperator;
 import io.github.resilience4j.reactor.retry.RetryOperator;
 import io.github.resilience4j.retry.RetryRegistry;
 import reactor.core.publisher.Flux;
@@ -17,14 +19,17 @@ public class Resilience4jOperatorApplier implements ResilienceOperatorApplier {
     private final CircuitBreakerRegistry circuitBreakerRegistry;
     private final RetryRegistry retryRegistry;
     private final BulkheadRegistry bulkheadRegistry;
+    private final RateLimiterRegistry rateLimiterRegistry;
 
     public Resilience4jOperatorApplier(
             Object circuitBreakerRegistry,
             Object retryRegistry,
-            Object bulkheadRegistry) {
+            Object bulkheadRegistry,
+            Object rateLimiterRegistry) {
         this.circuitBreakerRegistry = circuitBreakerRegistry instanceof CircuitBreakerRegistry registry ? registry : null;
         this.retryRegistry = retryRegistry instanceof RetryRegistry registry ? registry : null;
         this.bulkheadRegistry = bulkheadRegistry instanceof BulkheadRegistry registry ? registry : null;
+        this.rateLimiterRegistry = rateLimiterRegistry instanceof RateLimiterRegistry registry ? registry : null;
     }
 
     @Override
@@ -76,6 +81,22 @@ public class Resilience4jOperatorApplier implements ResilienceOperatorApplier {
     }
 
     @Override
+    public <T> Mono<T> applyRateLimiter(Mono<T> mono, String instanceName) {
+        if (rateLimiterRegistry == null) {
+            return mono;
+        }
+        return mono.transformDeferred(RateLimiterOperator.of(rateLimiterRegistry.rateLimiter(instanceName)));
+    }
+
+    @Override
+    public <T> Flux<T> applyRateLimiter(Flux<T> flux, String instanceName) {
+        if (rateLimiterRegistry == null) {
+            return flux;
+        }
+        return flux.transformDeferred(RateLimiterOperator.of(rateLimiterRegistry.rateLimiter(instanceName)));
+    }
+
+    @Override
     public boolean isInstanceConfigured(InstanceType type, String instanceName) {
         if (instanceName == null || instanceName.isBlank()) return true;
         return switch (type) {
@@ -83,6 +104,7 @@ public class Resilience4jOperatorApplier implements ResilienceOperatorApplier {
             case CIRCUIT_BREAKER ->
                     circuitBreakerRegistry == null || circuitBreakerRegistry.find(instanceName).isPresent();
             case BULKHEAD -> bulkheadRegistry == null || bulkheadRegistry.find(instanceName).isPresent();
+            case RATE_LIMITER -> rateLimiterRegistry == null || rateLimiterRegistry.find(instanceName).isPresent();
         };
     }
 }

@@ -14,7 +14,9 @@ import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRateLimiterMetrics;
 import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
@@ -131,7 +133,8 @@ public class ReactiveHttpClientAutoConfiguration {
 
     /**
      * Binds Resilience4j's tagged metrics ({@code resilience4j.circuitbreaker.*},
-     * {@code resilience4j.retry.*}, {@code resilience4j.bulkhead.*}) to the shared
+     * {@code resilience4j.retry.*}, {@code resilience4j.bulkhead.*},
+     * {@code resilience4j.ratelimiter.*}) to the shared
      * {@link MeterRegistry} when {@code resilience4j-micrometer} is on the classpath
      * and the corresponding Resilience4j registry bean is present in the context.
      *
@@ -163,6 +166,13 @@ public class ReactiveHttpClientAutoConfiguration {
         @ConditionalOnMissingBean(name = "reactiveHttpBulkheadMeterBinder")
         public MeterBinder reactiveHttpBulkheadMeterBinder(BulkheadRegistry registry) {
             return TaggedBulkheadMetrics.ofBulkheadRegistry(registry);
+        }
+
+        @Bean
+        @ConditionalOnBean(RateLimiterRegistry.class)
+        @ConditionalOnMissingBean(name = "reactiveHttpRateLimiterMeterBinder")
+        public MeterBinder reactiveHttpRateLimiterMeterBinder(RateLimiterRegistry registry) {
+            return TaggedRateLimiterMetrics.ofRateLimiterRegistry(registry);
         }
     }
 
