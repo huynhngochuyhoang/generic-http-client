@@ -588,6 +588,13 @@
       "defaultValue": true
     },
     {
+      "name": "reactive.http.observability.include-server-address",
+      "type": "java.lang.Boolean",
+      "description": "Include resolved server.address and server.port as Micrometer metric tags. Disabled by default because upstream hosts can be high-cardinality.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ObservabilityConfig",
+      "defaultValue": false
+    },
+    {
       "name": "reactive.http.observability.log-request-body",
       "type": "java.lang.Boolean",
       "description": "Include the request body in span events. Caution: may expose PII or large payloads. Default: false.",

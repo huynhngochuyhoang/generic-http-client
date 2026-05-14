@@ -26,6 +26,8 @@ public final class HttpClientObserverEvent {
     private final int attemptCount;
     private final long requestBytes;
     private final long responseBytes;
+    private final String serverAddress;
+    private final Integer serverPort;
 
     /**
      * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object)}
@@ -60,7 +62,7 @@ public final class HttpClientObserverEvent {
     }
 
     /**
-     * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object, int, long, long)}
+     * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object, int, long, long, String, Integer)}
      * to carry request / response byte sizes. This constructor defaults both sizes to
      * {@link #UNKNOWN_SIZE}, so the Micrometer observer will skip the size
      * distribution summaries for events constructed this way.
@@ -82,6 +84,12 @@ public final class HttpClientObserverEvent {
                 requestBody, responseBody, attemptCount, UNKNOWN_SIZE, UNKNOWN_SIZE);
     }
 
+    /**
+     * @deprecated Use {@link #HttpClientObserverEvent(String, String, String, String, Integer, long, Throwable, ErrorCategory, Object, Object, int, long, long, String, Integer)}
+     * to carry resolved server address and port. This constructor keeps source compatibility
+     * and leaves both server fields unset.
+     */
+    @Deprecated(since = "1.15.0", forRemoval = false)
     public HttpClientObserverEvent(
             String clientName,
             String apiName,
@@ -96,6 +104,26 @@ public final class HttpClientObserverEvent {
             int attemptCount,
             long requestBytes,
             long responseBytes) {
+        this(clientName, apiName, httpMethod, uriPath, statusCode, durationMs, error, errorCategory,
+                requestBody, responseBody, attemptCount, requestBytes, responseBytes, null, null);
+    }
+
+    public HttpClientObserverEvent(
+            String clientName,
+            String apiName,
+            String httpMethod,
+            String uriPath,
+            Integer statusCode,
+            long durationMs,
+            Throwable error,
+            ErrorCategory errorCategory,
+            Object requestBody,
+            Object responseBody,
+            int attemptCount,
+            long requestBytes,
+            long responseBytes,
+            String serverAddress,
+            Integer serverPort) {
         this.clientName = clientName;
         this.apiName = apiName;
         this.httpMethod = httpMethod;
@@ -109,6 +137,8 @@ public final class HttpClientObserverEvent {
         this.attemptCount = attemptCount;
         this.requestBytes = requestBytes;
         this.responseBytes = responseBytes;
+        this.serverAddress = serverAddress;
+        this.serverPort = serverPort;
     }
 
     /** The logical name of the client (value of {@code @ReactiveHttpClient(name = ...)}). */
@@ -169,6 +199,12 @@ public final class HttpClientObserverEvent {
      */
     public long getResponseBytes() { return responseBytes; }
 
+    /** Resolved outbound server host, or {@code null} when unavailable. */
+    public String getServerAddress() { return serverAddress; }
+
+    /** Resolved outbound server port, or {@code null} when unavailable. */
+    public Integer getServerPort() { return serverPort; }
+
     /** {@code true} when {@link #getError()} is non-null. */
     public boolean isError() { return error != null; }
 
@@ -182,6 +218,8 @@ public final class HttpClientObserverEvent {
                 ", statusCode=" + statusCode +
                 ", durationMs=" + durationMs +
                 ", attemptCount=" + attemptCount +
+                ", serverAddress='" + serverAddress + '\'' +
+                ", serverPort=" + serverPort +
                 ", error=" + (error != null ? error.getClass().getSimpleName() : "none") +
                 ", errorCategory=" + (errorCategory != null ? errorCategory.name() : "none") +
                 '}';

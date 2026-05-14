@@ -1,10 +1,10 @@
 package io.github.huynhngochuyhoang.httpstarter.config;
 
-import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
-import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.auth.AwsSigV4AuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.auth.OAuth2ClientCredentialsAuthProviderFactory;
+import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
+import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
 import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientHealthIndicator;
@@ -22,13 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -116,20 +112,20 @@ public class ReactiveHttpClientAutoConfiguration {
      *   <li>{@code micrometer-core} is on the classpath ({@link MeterRegistry} present)</li>
      *   <li>A {@link MeterRegistry} bean is available in the application context</li>
      *   <li>{@code reactive.http.observability.enabled} is {@code true} (the default)</li>
-     *   <li>No custom {@link HttpClientObserver} bean has been registered</li>
+     *   <li>No bean named {@code micrometerHttpClientObserver} has been registered</li>
      * </ul>
      */
     @Bean
     @ConditionalOnClass(MeterRegistry.class)
     @ConditionalOnBean(MeterRegistry.class)
-    @ConditionalOnMissingBean(HttpClientObserver.class)
+    @ConditionalOnMissingBean(name = "micrometerHttpClientObserver")
     @ConditionalOnProperty(
             prefix = "reactive.http.observability",
             name = "enabled",
             havingValue = "true",
             matchIfMissing = true)
-    public HttpClientObserver micrometerHttpClientObserver(MeterRegistry meterRegistry,
-                                                           ReactiveHttpClientProperties properties) {
+    public MicrometerHttpClientObserver micrometerHttpClientObserver(MeterRegistry meterRegistry,
+                                                                     ReactiveHttpClientProperties properties) {
         return new MicrometerHttpClientObserver(meterRegistry, properties.getObservability());
     }
 

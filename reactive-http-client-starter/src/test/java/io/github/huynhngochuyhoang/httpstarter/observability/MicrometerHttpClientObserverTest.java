@@ -11,9 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MicrometerHttpClientObserverTest {
 
@@ -124,6 +122,48 @@ class MicrometerHttpClientObserverTest {
 
         Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("client.name", "UNKNOWN")
+                .timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count(), 0.0d);
+    }
+
+    @Test
+    void skipsServerAddressTagsByDefault() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 8, null, null, null, "ok",
+                1, 0L, 2L, "api.example.com", 443
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests").timer();
+        assertNotNull(timer);
+        assertNull(timer.getId().getTag("server.address"));
+        assertNull(timer.getId().getTag("server.port"));
+    }
+
+    @Test
+    void recordsServerAddressTagsWhenOptedIn() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ReactiveHttpClientProperties.ObservabilityConfig config =
+                new ReactiveHttpClientProperties.ObservabilityConfig();
+        config.setIncludeServerAddress(true);
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(meterRegistry, config);
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 8, null, null, null, "ok",
+                1, 0L, 2L, "api.example.com", 443
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
+                .tag("server.address", "api.example.com")
+                .tag("server.port", "443")
                 .timer();
         assertNotNull(timer);
         assertEquals(1, timer.count(), 0.0d);

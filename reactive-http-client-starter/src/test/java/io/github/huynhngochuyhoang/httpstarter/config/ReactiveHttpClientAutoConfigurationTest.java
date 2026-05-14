@@ -2,6 +2,8 @@ package io.github.huynhngochuyhoang.httpstarter.config;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
+import io.github.huynhngochuyhoang.httpstarter.observability.MicrometerHttpClientObserver;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedBulkheadMetrics;
@@ -15,9 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -227,6 +229,18 @@ class ReactiveHttpClientAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void userObserverDoesNotSuppressNamedMicrometerObserver() {
+        runner.withUserConfiguration(SimpleMeterRegistryConfig.class, CustomObserverConfig.class)
+                .run(context -> {
+                    assertThat(context).hasBean("micrometerHttpClientObserver");
+                    assertThat(context.getBean("micrometerHttpClientObserver"))
+                            .isInstanceOf(MicrometerHttpClientObserver.class);
+                    assertThat(context.getBeansOfType(HttpClientObserver.class))
+                            .containsKeys("customHttpClientObserver", "micrometerHttpClientObserver");
+                });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class Resilience4jRegistriesConfig {
         @Bean
@@ -250,6 +264,14 @@ class ReactiveHttpClientAutoConfigurationTest {
         @Bean
         MeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class CustomObserverConfig {
+        @Bean
+        HttpClientObserver customHttpClientObserver() {
+            return event -> { };
         }
     }
 }

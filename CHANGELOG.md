@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Composite HTTP client observation.** Multiple `HttpClientObserver` beans now
+  run for each exchange, with failures isolated per observer. The Micrometer and
+  OpenTelemetry built-ins are registered as named observers so metrics and spans
+  can be emitted together without user-written delegation.
+- **Resolved server attributes for observability.** `HttpClientObserverEvent`
+  now carries nullable `serverAddress` and `serverPort` fields. OTel spans set
+  `server.address` and `server.port` when available, and Micrometer can include
+  those tags with `reactive.http.observability.include-server-address=true`
+  (default `false` to avoid high-cardinality metric labels).
+
+### Changed
+
+- **Observer override semantics documented.** User `HttpClientObserver` beans now
+  run alongside built-ins. Override built-ins by registering beans named
+  `micrometerHttpClientObserver` or `openTelemetryHttpClientObserver`.
+
 ---
 
 ## [1.15.0] – 2026-05-13

@@ -1,13 +1,8 @@
 package io.github.huynhngochuyhoang.httpstarter.otel;
 
-import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.opentelemetry.api.OpenTelemetry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,8 +10,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Auto-configuration that registers an {@link OpenTelemetryHttpClientObserver}
  * when the OpenTelemetry API is on the classpath, an {@link OpenTelemetry}
- * bean is available in the context, and no other {@link HttpClientObserver}
- * has been registered.
+ * bean is available in the context.
  *
  * <p>Activated under property {@code reactive.http.observability.otel.enabled}
  * (default {@code true} when the OTel API is present). Set to {@code false} to
@@ -44,8 +38,8 @@ public class OpenTelemetryHttpClientAutoConfiguration {
     static class SpanConfiguration {
 
         @Bean(name = "openTelemetryHttpClientObserver")
-        @ConditionalOnMissingBean(HttpClientObserver.class)
-        HttpClientObserver openTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
+        @ConditionalOnMissingBean(name = "openTelemetryHttpClientObserver")
+        OpenTelemetryHttpClientObserver openTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
             return new OpenTelemetryHttpClientObserver(openTelemetry);
         }
     }

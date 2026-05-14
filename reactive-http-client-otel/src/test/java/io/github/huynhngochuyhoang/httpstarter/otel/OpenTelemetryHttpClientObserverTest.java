@@ -1,7 +1,12 @@
 package io.github.huynhngochuyhoang.httpstarter.otel;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
+import io.github.huynhngochuyhoang.httpstarter.observability.CompositeHttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
+import io.github.huynhngochuyhoang.httpstarter.observability.MicrometerHttpClientObserver;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
@@ -49,7 +54,7 @@ class OpenTelemetryHttpClientObserverTest {
         observer.record(new HttpClientObserverEvent(
                 "user-service", "user.get", "GET", "/users/{id}",
                 200, 12L, null, null, null, null,
-                1, 0L, 256L
+                1, 0L, 256L, "api.example.com", 443
         ));
 
         SpanData span = onlySpan();
@@ -59,11 +64,35 @@ class OpenTelemetryHttpClientObserverTest {
 
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_HTTP_METHOD)).isEqualTo("GET");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_HTTP_STATUS_CODE)).isEqualTo(200L);
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_ADDRESS)).isEqualTo("api.example.com");
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_PORT)).isEqualTo(443L);
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_URL_TEMPLATE)).isEqualTo("/users/{id}");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_CLIENT_NAME)).isEqualTo("user-service");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_API_NAME)).isEqualTo("user.get");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_ATTEMPT_COUNT)).isEqualTo(1L);
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_RESPONSE_BYTES)).isEqualTo(256L);
+    }
+
+    @Test
+    void compositeMicrometerAndOpenTelemetryObserversRecordOneExchange() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        CompositeHttpClientObserver composite = new CompositeHttpClientObserver(List.of(
+                new MicrometerHttpClientObserver(meterRegistry, new ReactiveHttpClientProperties.ObservabilityConfig()),
+                observer
+        ));
+
+        composite.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 12L, null, null, null, null,
+                1, 0L, 256L, "api.example.com", 443
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
+                .tag("client.name", "user-service")
+                .timer();
+        assertThat(timer).isNotNull();
+        assertThat(timer.count()).isEqualTo(1);
+        assertThat(onlySpan().getKind().name()).isEqualTo("CLIENT");
     }
 
     @Test
