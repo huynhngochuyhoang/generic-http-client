@@ -186,6 +186,7 @@ reactive:
       enabled: true
       metric-name: reactive.http.client.requests
       include-url-path: true
+      include-server-address: false
       log-request-body: false
       log-response-body: false
 ```

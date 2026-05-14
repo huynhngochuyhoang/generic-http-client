@@ -1,6 +1,10 @@
 package io.github.huynhngochuyhoang.httpstarter.otel;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientAutoConfiguration;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
+import io.github.huynhngochuyhoang.httpstarter.observability.MicrometerHttpClientObserver;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.opentelemetry.api.OpenTelemetry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -58,11 +62,56 @@ class OpenTelemetryHttpClientAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void userObserverDoesNotSuppressNamedOpenTelemetryObserver() {
+        runner.withUserConfiguration(CustomObserverConfig.class)
+                .run(context -> {
+                    assertThat(context).hasBean("openTelemetryHttpClientObserver");
+                    assertThat(context.getBean("openTelemetryHttpClientObserver"))
+                            .isInstanceOf(OpenTelemetryHttpClientObserver.class);
+                    assertThat(context.getBeansOfType(HttpClientObserver.class))
+                            .containsKeys("customHttpClientObserver", "openTelemetryHttpClientObserver");
+                });
+    }
+
+    @Test
+    void starterMicrometerAndOpenTelemetryObserversCanCoexist() {
+        new ReactiveWebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        ReactiveHttpClientAutoConfiguration.class,
+                        OpenTelemetryHttpClientAutoConfiguration.class))
+                .withUserConfiguration(OpenTelemetryConfig.class, MeterRegistryConfig.class)
+                .run(context -> {
+                    assertThat(context.getBean("micrometerHttpClientObserver"))
+                            .isInstanceOf(MicrometerHttpClientObserver.class);
+                    assertThat(context.getBean("openTelemetryHttpClientObserver"))
+                            .isInstanceOf(OpenTelemetryHttpClientObserver.class);
+                    assertThat(context.getBeansOfType(HttpClientObserver.class))
+                            .containsKeys("micrometerHttpClientObserver", "openTelemetryHttpClientObserver");
+                });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class OpenTelemetryConfig {
         @Bean
         OpenTelemetry openTelemetry() {
             return OpenTelemetry.noop();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class CustomObserverConfig {
+        @Bean
+        HttpClientObserver customHttpClientObserver() {
+            return event -> { };
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class MeterRegistryConfig {
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 }

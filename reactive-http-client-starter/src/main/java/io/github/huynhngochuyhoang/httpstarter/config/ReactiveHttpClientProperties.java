@@ -4,15 +4,7 @@ import io.github.huynhngochuyhoang.httpstarter.core.SensitiveHeaders;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Configuration properties for all reactive HTTP clients.
@@ -615,6 +607,12 @@ public class ReactiveHttpClientProperties {
          */
         private boolean includeUrlPath = true;
 
+        /**
+         * Include resolved outbound server.address / server.port as Micrometer tags.
+         * Disabled by default because upstream hosts can be high-cardinality.
+         */
+        private boolean includeServerAddress = false;
+
         /** Log request body in span events (caution: PII / large payloads). */
         private boolean logRequestBody = false;
 
@@ -632,6 +630,9 @@ public class ReactiveHttpClientProperties {
 
         public boolean isIncludeUrlPath() { return includeUrlPath; }
         public void setIncludeUrlPath(boolean includeUrlPath) { this.includeUrlPath = includeUrlPath; }
+
+        public boolean isIncludeServerAddress() { return includeServerAddress; }
+        public void setIncludeServerAddress(boolean includeServerAddress) { this.includeServerAddress = includeServerAddress; }
 
         public boolean isLogRequestBody() { return logRequestBody; }
         public void setLogRequestBody(boolean logRequestBody) { this.logRequestBody = logRequestBody; }

@@ -2,7 +2,6 @@ package io.github.huynhngochuyhoang.httpstarter.observability;
 
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -22,7 +21,8 @@ import java.util.concurrent.TimeUnit;
  *   <tr>
  *     <td>{@code <metricName>} (default: {@code reactive.http.client.requests})</td>
  *     <td>Timer (also exposes count + sum)</td>
- *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category</td>
+ *     <td>client.name, api.name, http.method, uri, http.status_code, outcome, exception, error.category;
+ *         optionally server.address and server.port</td>
  *   </tr>
  *   <tr>
  *     <td>{@code <metricName>.attempts}</td>
@@ -156,15 +156,7 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
     }
 
     private Tags buildLowCardinalityTags(HttpClientObserverEvent event) {
-        String uri = config.isIncludeUrlPath() && event.getUriPath() != null
-                ? event.getUriPath()
-                : "NONE";
-        return Tags.of(
-                Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
-                Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
-                Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
-                Tag.of("uri", uri)
-        );
+        return commonTags(event);
     }
 
     private Tags buildTags(HttpClientObserverEvent event) {
@@ -184,15 +176,30 @@ public class MicrometerHttpClientObserver implements HttpClientObserver {
                 ? event.getErrorCategory().name()
                 : "none";
 
-        return Tags.of(
-                Tag.of("client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN"),
-                Tag.of("api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN"),
-                Tag.of("http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN"),
-                Tag.of("uri", uri),
-                Tag.of("http.status_code", statusCode),
-                Tag.of("outcome", outcome),
-                Tag.of("exception", exception),
-                Tag.of("error.category", errorCategory)
+        return commonTags(event).and(
+                "http.status_code", statusCode,
+                "outcome", outcome,
+                "exception", exception,
+                "error.category", errorCategory
+        );
+    }
+
+    private Tags commonTags(HttpClientObserverEvent event) {
+        String uri = config.isIncludeUrlPath() && event.getUriPath() != null
+                ? event.getUriPath()
+                : "NONE";
+        Tags tags = Tags.of(
+                "client.name", event.getClientName() != null ? event.getClientName() : "UNKNOWN",
+                "api.name", event.getApiName() != null ? event.getApiName() : "UNKNOWN",
+                "http.method", event.getHttpMethod() != null ? event.getHttpMethod() : "UNKNOWN",
+                "uri", uri
+        );
+        if (!config.isIncludeServerAddress()) {
+            return tags;
+        }
+        return tags.and(
+                "server.address", event.getServerAddress() != null ? event.getServerAddress() : "UNKNOWN",
+                "server.port", event.getServerPort() != null ? String.valueOf(event.getServerPort()) : "UNKNOWN"
         );
     }
 

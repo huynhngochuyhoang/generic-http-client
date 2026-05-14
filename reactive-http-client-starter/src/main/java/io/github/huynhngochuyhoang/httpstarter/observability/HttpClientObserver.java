@@ -9,7 +9,8 @@ package io.github.huynhngochuyhoang.httpstarter.observability;
  *
  * <p>The default implementation ({@link MicrometerHttpClientObserver}) records
  * Micrometer metrics when a {@code MeterRegistry} bean is present on the classpath.
- * Register your own bean to replace or extend the default behaviour.
+ * Custom observer beans run alongside built-ins. To replace a built-in, register
+ * a bean with that built-in's name.
  *
  * @see MicrometerHttpClientObserver
  */

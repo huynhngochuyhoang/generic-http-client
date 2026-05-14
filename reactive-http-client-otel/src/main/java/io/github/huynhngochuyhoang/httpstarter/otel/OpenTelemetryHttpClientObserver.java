@@ -4,11 +4,7 @@ import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.common.AttributeKey;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.SpanBuilder;
-import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.StatusCode;
-import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.trace.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +32,7 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *   <li>{@code http.request.method}</li>
  *   <li>{@code http.response.status_code} (when a response was received)</li>
+ *   <li>{@code server.address} / {@code server.port} (when the resolved request URL is available)</li>
  *   <li>{@code url.template} — the path template (e.g. {@code /users/{id}})</li>
  *   <li>{@code error.type} — {@link io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory}
  *       name, or the exception class simple-name when category is unset</li>
@@ -57,6 +54,8 @@ public class OpenTelemetryHttpClientObserver implements HttpClientObserver {
 
     static final AttributeKey<String> ATTR_HTTP_METHOD = AttributeKey.stringKey("http.request.method");
     static final AttributeKey<Long> ATTR_HTTP_STATUS_CODE = AttributeKey.longKey("http.response.status_code");
+    static final AttributeKey<String> ATTR_SERVER_ADDRESS = AttributeKey.stringKey("server.address");
+    static final AttributeKey<Long> ATTR_SERVER_PORT = AttributeKey.longKey("server.port");
     static final AttributeKey<String> ATTR_URL_TEMPLATE = AttributeKey.stringKey("url.template");
     static final AttributeKey<String> ATTR_ERROR_TYPE = AttributeKey.stringKey("error.type");
     static final AttributeKey<String> ATTR_CLIENT_NAME = AttributeKey.stringKey("rhttp.client.name");
@@ -91,6 +90,12 @@ public class OpenTelemetryHttpClientObserver implements HttpClientObserver {
             }
             if (event.getStatusCode() != null) {
                 builder.setAttribute(ATTR_HTTP_STATUS_CODE, (long) event.getStatusCode());
+            }
+            if (event.getServerAddress() != null) {
+                builder.setAttribute(ATTR_SERVER_ADDRESS, event.getServerAddress());
+            }
+            if (event.getServerPort() != null) {
+                builder.setAttribute(ATTR_SERVER_PORT, (long) event.getServerPort());
             }
             if (event.getRequestBytes() >= 0) {
                 builder.setAttribute(ATTR_REQUEST_BYTES, event.getRequestBytes());

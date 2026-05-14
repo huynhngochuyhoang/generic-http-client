@@ -1,6 +1,6 @@
 # Observability
 
-The starter ships two observability back-ends that are mutually exclusive: Micrometer (default) and OpenTelemetry (optional companion module). Both implement the `HttpClientObserver` extension point.
+The starter ships two observability back-ends: Micrometer (default) and OpenTelemetry (optional companion module). Both implement the `HttpClientObserver` extension point and can run together.
 
 ---
 
@@ -22,6 +22,8 @@ End-to-end duration from first attempt to final completion (after all retries).
 | `exception` | Simple class name of the thrown exception, or `none` |
 | `error.category` | `ErrorCategory` value — see [03-error-handling.md](03-error-handling.md) |
 | `uri` | Path template (e.g. `/users/{id}`), or `NONE`; disable with `include-url-path: false` |
+| `server.address` | Resolved upstream host; opt in with `include-server-address: true` |
+| `server.port` | Resolved upstream port; opt in with `include-server-address: true` |
 
 ### `reactive.http.client.requests.attempts` (DistributionSummary)
 
@@ -65,6 +67,7 @@ reactive:
       enabled: true
       metric-name: reactive.http.client.requests   # custom timer/counter name
       include-url-path: true              # set false for high-cardinality paths
+      include-server-address: false       # opt-in server.address/server.port metric tags
       log-request-body: false             # include body in span events (PII risk)
       log-response-body: false
       histogram:
@@ -201,6 +204,8 @@ reactive:
 | Span kind | `CLIENT` |
 | `http.request.method` | HTTP verb |
 | `http.response.status_code` | Response status code |
+| `server.address` | Resolved upstream host |
+| `server.port` | Resolved upstream port |
 | `url.template` | Path template, e.g. `/users/{id}` |
 | `error.type` | `ErrorCategory` name; falls back to the exception's simple class name |
 | `rhttp.client.name` | Logical client name |
@@ -235,19 +240,20 @@ before starter per-client built-ins. Per-client `ReactiveHttpClientCustomizer`
 filters run later, after correlation ID, auth, and exchange logging have been
 wired.
 
-### Mutual exclusion with Micrometer
+### Running with Micrometer
 
-`OpenTelemetryHttpClientObserver` registers under `@ConditionalOnMissingBean(HttpClientObserver.class)`, which means pulling in the OTel module disables the Micrometer observer. To run both, register a composite `HttpClientObserver` bean:
+`MicrometerHttpClientObserver` and `OpenTelemetryHttpClientObserver` are named built-in beans. When both modules are present, the invocation handler records through all available `HttpClientObserver` beans, so one exchange can produce both a Micrometer timer and an OTel `CLIENT` span.
+
+Custom `HttpClientObserver` beans now run alongside the built-ins. To replace a built-in, register a bean with the same name: `micrometerHttpClientObserver` or `openTelemetryHttpClientObserver`. To take complete control over delegation, expose your own observer and exclude or override the built-in bean names.
+
+For manual composition outside auto-configuration, use `CompositeHttpClientObserver`:
 
 ```java
 @Bean
 HttpClientObserver compositeObserver(
         MicrometerHttpClientObserver micrometer,
         OpenTelemetryHttpClientObserver otel) {
-    return event -> {
-        micrometer.onExchange(event);
-        otel.onExchange(event);
-    };
+    return new CompositeHttpClientObserver(List.of(micrometer, otel));
 }
 ```
 

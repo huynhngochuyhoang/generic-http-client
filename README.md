@@ -580,6 +580,7 @@ When a `MeterRegistry` is present, the starter records four metrics per exchange
 | `exception` | simple class name or `none` |
 | `error.category` | `RATE_LIMITED`, `CLIENT_ERROR`, `SERVER_ERROR`, `TIMEOUT`, `CANCELLED`, `AUTH_PROVIDER_ERROR`, `RESPONSE_DECODE_ERROR`, `UNKNOWN`, `none` |
 | `uri` | path template or `NONE` (disable via `include-url-path: false`) |
+| `server.address` / `server.port` | resolved upstream host and port; opt in with `include-server-address: true` |
 
 **`reactive.http.client.requests.attempts`** (DistributionSummary) — number of subscription attempts per invocation (1 = succeeded on first try; >1 = Resilience4j retry fired). Tags: `client.name`, `api.name`, `http.method`, `uri`. A p95 > 1 is a signal that a downstream service is degraded.
 
@@ -600,7 +601,7 @@ All gauges are tagged with the pool name (`reactive-http-client-<clientName>`). 
 
 ### Actuator health indicator
 
-When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `reactive.http.client.requests` timer meters and reports per-client error rates computed from probe-to-probe deltas — i.e. the window size is the interval between actuator health probes. No additional observation path is required (the indicator does not implement `HttpClientObserver`, so the `@ConditionalOnMissingBean(HttpClientObserver.class)` override contract still stands).
+When `spring-boot-starter-actuator` is on the classpath and a `MeterRegistry` bean is present, the starter auto-registers `HttpClientHealthIndicator`. It reads the `reactive.http.client.requests` timer meters and reports per-client error rates computed from probe-to-probe deltas — i.e. the window size is the interval between actuator health probes. No additional observation path is required because the indicator reads existing meters instead of implementing `HttpClientObserver`.
 
 ```yaml
 reactive:
@@ -670,6 +671,7 @@ the inbound `OpenTelemetryContextWebFilter` and outbound propagation
 | Span kind | `CLIENT` |
 | `http.request.method` | event HTTP verb |
 | `http.response.status_code` | event status code (omitted on network failure before response) |
+| `server.address` / `server.port` | resolved upstream host and port |
 | `url.template` | path template, e.g. `/users/{id}` |
 | `error.type` | `ErrorCategory` name; falls back to the exception's simple class name when category is unset |
 | `rhttp.client.name` / `rhttp.api.name` | starter-specific |
@@ -690,11 +692,10 @@ The outbound propagation filter is applied through a Spring `WebClientCustomizer
 before starter per-client built-ins. Per-client `ReactiveHttpClientCustomizer`
 filters run after correlation-ID propagation, auth, and exchange logging.
 
-> ⚠️ The OTel observer registers as the only `HttpClientObserver` under
-> `@ConditionalOnMissingBean(HttpClientObserver.class)` — pulling in the OTel
-> module **disables the Micrometer observer** (and vice versa). To run both,
-> register a custom `HttpClientObserver` bean that delegates to both
-> implementations.
+Micrometer and OTel observers can run together. Built-ins register as named
+observer beans (`micrometerHttpClientObserver` and
+`openTelemetryHttpClientObserver`), and custom `HttpClientObserver` beans run
+alongside them. To replace a built-in, register a bean with the same name.
 
 ### Resilience4j metrics
 
@@ -715,6 +716,7 @@ reactive:
       enabled: true
       metric-name: reactive.http.client.requests
       include-url-path: true
+      include-server-address: false
       log-request-body: false
       log-response-body: false
     network:

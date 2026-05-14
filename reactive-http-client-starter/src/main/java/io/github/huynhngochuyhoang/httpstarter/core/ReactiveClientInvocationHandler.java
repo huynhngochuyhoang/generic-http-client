@@ -1,60 +1,49 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.huynhngochuyhoang.httpstarter.annotation.FormFile;
 import io.github.huynhngochuyhoang.httpstarter.annotation.LogHttpExchange;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthRequest;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+import io.github.huynhngochuyhoang.httpstarter.exception.*;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
-import io.github.huynhngochuyhoang.httpstarter.exception.AuthProviderException;
-import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
-import io.github.huynhngochuyhoang.httpstarter.exception.HttpClientException;
-import io.github.huynhngochuyhoang.httpstarter.exception.RequestSerializationException;
-import io.github.huynhngochuyhoang.httpstarter.exception.RemoteServiceException;
+import io.github.huynhngochuyhoang.httpstarter.observability.CompositeHttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.handler.timeout.ReadTimeoutException;
+import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.codec.DecodingException;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import io.netty.handler.timeout.ReadTimeoutException;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClientRequest;
 import reactor.netty.http.client.PrematureCloseException;
+
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.net.ConnectException;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
@@ -80,6 +69,8 @@ import java.util.function.Function;
 public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ReactiveClientInvocationHandler.class);
+    static final String OBSERVED_REQUEST_URL_ATTRIBUTE =
+            ReactiveClientInvocationHandler.class.getName() + ".observedRequestUrl";
     private static final int MAX_LOGGER_CACHE_SIZE = 256;
     private static final int MAX_RESILIENCE_WARNING_KEYS = 256;
 
@@ -135,7 +126,28 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      * are still visible after this handler has been constructed.
      */
     private HttpClientObserver getObserver() {
-        return observerProvider.getIfAvailable();
+        java.util.stream.Stream<HttpClientObserver> stream = observerProvider.orderedStream();
+        if (stream == null) {
+            return observerProvider.getIfAvailable();
+        }
+        List<HttpClientObserver> observers = stream.toList();
+        if (observers.isEmpty()) {
+            return observerProvider.getIfAvailable();
+        }
+        if (observers.size() == 1) {
+            return observers.get(0);
+        }
+        return new CompositeHttpClientObserver(observers);
+    }
+
+    public static ExchangeFilterFunction requestUrlObservationFilter() {
+        return (request, next) -> {
+            request.attribute(OBSERVED_REQUEST_URL_ATTRIBUTE)
+                    .filter(AtomicReference.class::isInstance)
+                    .map(AtomicReference.class::cast)
+                    .ifPresent(reference -> reference.set(request.url()));
+            return next.exchange(request);
+        };
     }
 
     @Override
@@ -166,6 +178,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         AtomicLong start = new AtomicLong();
         AtomicBoolean firstAttempt = new AtomicBoolean(true);
         AtomicInteger attemptCount = new AtomicInteger(0);
+        AtomicReference<URI> requestUrl = new AtomicReference<>();
         HttpExchangeLogger exchangeLogger = resolveExchangeLogger(proxy, method, meta);
 
         WebClient.RequestBodySpec requestSpec = webClient
@@ -217,12 +230,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     } else {
                         requestHeadersSpec = preparedRequestSpec;
                     }
+                    requestHeadersSpec = requestHeadersSpec.attribute(OBSERVED_REQUEST_URL_ATTRIBUTE, requestUrl);
                     // Apply when: (a) caller set an explicit @TimeoutMs (including 0 to disable), or (b) a resilience timeout resolved to > 0.
-                    return (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
+                    boolean shouldApplyResponseTimeout = meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
                             || effectiveApi.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
-                            || timeoutMs > 0)
-                            ? applyRequestLevelResponseTimeout(requestHeadersSpec, timeoutMs)
-                            : requestHeadersSpec;
+                            || timeoutMs > 0;
+                    return configureNativeRequest(requestHeadersSpec, timeoutMs, shouldApplyResponseTimeout, requestUrl);
                 });
 
         AtomicReference<HttpStatusCode> responseStatus = new AtomicReference<>();
@@ -259,12 +272,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 .doOnError(terminalError::set)
                 .doOnTerminate(() -> {
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
+                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 })
                 .doOnCancel(() -> {
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
+                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 });
             }
@@ -301,12 +314,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             .doOnError(terminalError::set)
             .doOnTerminate(() -> {
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
+                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                             responseStatus.get(), responseHeaders.get(), terminalBody.get(), terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             })
             .doOnCancel(() -> {
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, start.get(),
+                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                             responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             });
         }
@@ -462,12 +475,15 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 configuredTimeoutMs);
     }
 
-    private WebClient.RequestHeadersSpec<?> applyRequestLevelResponseTimeout(
+    private WebClient.RequestHeadersSpec<?> configureNativeRequest(
             WebClient.RequestHeadersSpec<?> requestHeadersSpec,
-            long timeoutMs) {
+            long timeoutMs,
+            boolean shouldApplyResponseTimeout,
+            AtomicReference<URI> requestUrl) {
         return requestHeadersSpec.httpRequest(httpRequest -> {
+            requestUrl.set(httpRequest.getURI());
             Object nativeRequest = httpRequest.getNativeRequest();
-            if (nativeRequest instanceof HttpClientRequest reactorRequest) {
+            if (shouldApplyResponseTimeout && nativeRequest instanceof HttpClientRequest reactorRequest) {
                 reactorRequest.responseTimeout(timeoutMs > 0 ? Duration.ofMillis(timeoutMs) : null);
             }
         });
@@ -714,6 +730,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             String httpMethod,
             String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
             long startMs,
             HttpStatusCode statusCode,
             Map<String, List<String>> responseHeaders,
@@ -727,7 +744,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         if (observer != null) {
             long responseBytes = extractContentLengthBytes(responseHeaders);
-            notifyObserver(observer, meta, httpMethod, pathTemplate, resolved, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
+            notifyObserver(observer, meta, httpMethod, pathTemplate, resolved, requestUrl, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
         }
     }
 
@@ -782,6 +799,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             String httpMethod,
             String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
             long startMs,
             HttpStatusCode statusCode,
             Throwable error,
@@ -805,11 +823,30 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     logRespBody ? responseBody : null,
                     attemptCount,
                     requestBytes,
-                    responseBytes
+                    responseBytes,
+                    requestUrl != null ? requestUrl.getHost() : null,
+                    resolveServerPort(requestUrl)
             ));
         } catch (Exception e) {
             log.warn("HttpClientObserver threw an exception – ignoring: {}", e.getMessage());
         }
+    }
+
+    private Integer resolveServerPort(URI requestUrl) {
+        if (requestUrl == null || requestUrl.getHost() == null) {
+            return null;
+        }
+        if (requestUrl.getPort() >= 0) {
+            return requestUrl.getPort();
+        }
+        String scheme = requestUrl.getScheme();
+        if ("http".equalsIgnoreCase(scheme)) {
+            return 80;
+        }
+        if ("https".equalsIgnoreCase(scheme)) {
+            return 443;
+        }
+        return null;
     }
 
     /**

@@ -14,10 +14,10 @@ Suggested release: `1.15.0+` if backward-compatible; hold composite observer sem
 
 ## Acceptance
 
-- [ ] Existing `HttpClientObserverEvent` constructor compatibility is preserved or explicitly migrated.
-- [ ] OTel tests assert `server.address` and `server.port`.
-- [ ] Micrometer tests cover the cardinality opt-in flag.
-- [ ] Combined Micrometer + OTel test records both a timer and a CLIENT span for one exchange.
-- [ ] User-supplied observer behavior is documented and tested.
-- [ ] `CHANGELOG.md` clearly states whether observer semantics changed.
-- [ ] `mvn test` passes.
+- [x] Existing `HttpClientObserverEvent` constructor compatibility is preserved or explicitly migrated.
+- [x] OTel tests assert `server.address` and `server.port`.
+- [x] Micrometer tests cover the cardinality opt-in flag.
+- [x] Combined Micrometer + OTel test records both a timer and a CLIENT span for one exchange.
+- [x] User-supplied observer behavior is documented and tested.
+- [x] `CHANGELOG.md` clearly states whether observer semantics changed.
+- [x] `mvn test` passes.
