@@ -57,6 +57,19 @@ userApiClient.getUser(id)
     });
 ```
 
+Use `ErrorCategories` when business logic receives a generic `Throwable`, for
+example in one shared reactive error handler:
+
+```java
+userApiClient.getUser(id)
+    .onErrorResume(error -> switch (ErrorCategories.from(error)) {
+        case RATE_LIMITED -> backoffFallback(error);
+        case CLIENT_ERROR -> Mono.error(new BusinessValidationException(error));
+        case SERVER_ERROR, TIMEOUT, CONNECT_ERROR -> retryLater(error);
+        case null, default -> Mono.error(error);
+    });
+```
+
 ---
 
 ## Handling auth errors

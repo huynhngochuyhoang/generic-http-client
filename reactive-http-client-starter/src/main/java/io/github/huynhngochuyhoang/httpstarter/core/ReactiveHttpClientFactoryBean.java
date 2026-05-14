@@ -96,8 +96,9 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         Object circuitBreakerRegistry = resolveSafely("io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry");
         Object retryRegistry = resolveSafely("io.github.resilience4j.retry.RetryRegistry");
         Object bulkheadRegistry = resolveSafely("io.github.resilience4j.bulkhead.BulkheadRegistry");
+        Object rateLimiterRegistry = resolveSafely("io.github.resilience4j.ratelimiter.RateLimiterRegistry");
         ResilienceOperatorApplier resilienceOperatorApplier = resolveResilienceOperatorApplier(
-                circuitBreakerRegistry, retryRegistry, bulkheadRegistry);
+                circuitBreakerRegistry, retryRegistry, bulkheadRegistry, rateLimiterRegistry);
         ObjectMapper objectMapper = applicationContext.getBeanProvider(ObjectMapper.class).getIfAvailable();
 
         if (config.getResilience() != null && config.getResilience().isEnabled()) {
@@ -362,12 +363,15 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     private ResilienceOperatorApplier resolveResilienceOperatorApplier(
             Object circuitBreakerRegistry,
             Object retryRegistry,
-            Object bulkheadRegistry) {
-        if (circuitBreakerRegistry == null && retryRegistry == null && bulkheadRegistry == null) {
+            Object bulkheadRegistry,
+            Object rateLimiterRegistry) {
+        if (circuitBreakerRegistry == null && retryRegistry == null && bulkheadRegistry == null
+                && rateLimiterRegistry == null) {
             return new NoopResilienceOperatorApplier();
         }
         try {
-            return new Resilience4jOperatorApplier(circuitBreakerRegistry, retryRegistry, bulkheadRegistry);
+            return new Resilience4jOperatorApplier(
+                    circuitBreakerRegistry, retryRegistry, bulkheadRegistry, rateLimiterRegistry);
         } catch (Throwable error) {
             log.warn("Resilience4j operator applier could not be initialized. Falling back to no-op resilience.",
                     error);
@@ -378,6 +382,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     /**
      * Eagerly parses every method on {@code clientInterface}, then verifies that
      * any per-method {@code @Retry} / {@code @CircuitBreaker} / {@code @Bulkhead}
+     * / {@code @RateLimiter}
      * instance name has a corresponding entry in the matching Resilience4j
      * registry. Fails fast at proxy construction time so a typo doesn't silently
      * fall back to default-configured behaviour.
@@ -403,12 +408,14 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                     meta.getCircuitBreakerInstanceName(), method, "@CircuitBreaker", missing);
             checkInstance(applier, ResilienceOperatorApplier.InstanceType.BULKHEAD,
                     meta.getBulkheadInstanceName(), method, "@Bulkhead", missing);
+            checkInstance(applier, ResilienceOperatorApplier.InstanceType.RATE_LIMITER,
+                    meta.getRateLimiterInstanceName(), method, "@RateLimiter", missing);
         }
         if (!missing.isEmpty()) {
             throw new IllegalStateException(
                     "Reactive HTTP client '" + clientName + "' references undefined Resilience4j instances:\n  - "
                             + String.join("\n  - ", missing)
-                            + "\nDefine them under resilience4j.<retry|circuitbreaker|bulkhead>.instances.* in application config.");
+                            + "\nDefine them under resilience4j.<retry|circuitbreaker|bulkhead|ratelimiter>.instances.* in application config.");
         }
     }
 

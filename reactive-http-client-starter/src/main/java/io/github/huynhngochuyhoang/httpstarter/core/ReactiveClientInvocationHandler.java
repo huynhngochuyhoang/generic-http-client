@@ -11,13 +11,11 @@ import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.observability.CompositeHttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
-import io.netty.handler.timeout.ReadTimeoutException;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.codec.DecodingException;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -33,20 +31,16 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.client.HttpClientRequest;
-import reactor.netty.http.client.PrematureCloseException;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.net.ConnectException;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -404,6 +398,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (isRetryableMethod(httpMethod)) {
             mono = applyRetryMono(mono, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
+        mono = applyRateLimiterMono(mono, resolveResilienceInstanceName(meta.getRateLimiterInstanceName(), resilience.getRateLimiter()));
         mono = applyCircuitBreakerMono(mono, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
         mono = applyBulkheadMono(mono, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
         return mono;
@@ -416,6 +411,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (isRetryableMethod(httpMethod)) {
             flux = applyRetryFlux(flux, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
         }
+        flux = applyRateLimiterFlux(flux, resolveResilienceInstanceName(meta.getRateLimiterInstanceName(), resilience.getRateLimiter()));
         flux = applyCircuitBreakerFlux(flux, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
         flux = applyBulkheadFlux(flux, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
         return flux;
@@ -555,6 +551,26 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return resilienceOperatorApplier.applyRetry((Flux<Object>) flux, instanceName);
         } catch (Exception e) {
             logResilienceOperatorFailure("retry", instanceName, e);
+            return flux;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Mono<?> applyRateLimiterMono(Mono<?> mono, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyRateLimiter((Mono<Object>) mono, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("rateLimiter", instanceName, e);
+            return mono;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Flux<?> applyRateLimiterFlux(Flux<?> flux, String instanceName) {
+        try {
+            return resilienceOperatorApplier.applyRateLimiter((Flux<Object>) flux, instanceName);
+        } catch (Exception e) {
+            logResilienceOperatorFailure("rateLimiter", instanceName, e);
             return flux;
         }
     }
@@ -989,69 +1005,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private ErrorCategory resolveErrorCategory(HttpStatusCode statusCode, Throwable error) {
-        if (error instanceof HttpClientException httpClientException) {
-            return httpClientException.getErrorCategory();
-        }
-        if (error instanceof RemoteServiceException remoteServiceException) {
-            return remoteServiceException.getErrorCategory();
-        }
-        if (error instanceof TimeoutException || error instanceof ReadTimeoutException
-                || error instanceof PrematureCloseException) {
-            return ErrorCategory.TIMEOUT;
-        }
-        if (error instanceof CancellationException) {
-            return ErrorCategory.CANCELLED;
-        }
-        if (error instanceof AuthProviderException) {
-            return ErrorCategory.AUTH_PROVIDER_ERROR;
-        }
-        Throwable rootCause = getRootCause(error);
-        if (rootCause instanceof UnknownHostException) {
-            return ErrorCategory.UNKNOWN_HOST;
-        }
-        if (rootCause instanceof ConnectException) {
-            return ErrorCategory.CONNECT_ERROR;
-        }
-        if (isResponseDecodeError(statusCode, error)) {
-            return ErrorCategory.RESPONSE_DECODE_ERROR;
-        }
-        if (statusCode != null) {
-            int code = statusCode.value();
-            if (code == 429) {
-                return ErrorCategory.RATE_LIMITED;
-            }
-            if (code >= 400 && code < 500) {
-                return ErrorCategory.CLIENT_ERROR;
-            }
-            if (code >= 500) {
-                return ErrorCategory.SERVER_ERROR;
-            }
-        }
-        return error != null ? ErrorCategory.UNKNOWN : null;
-    }
-
-    private boolean isResponseDecodeError(HttpStatusCode statusCode, Throwable error) {
-        if (statusCode == null || statusCode.isError()) {
-            return false;
-        }
-        Throwable current = error;
-        while (current != null) {
-            if (current instanceof DecodingException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
-
-    private Throwable getRootCause(Throwable error) {
-        Throwable current = error;
-        int depth = 0;
-        while (current != null && current.getCause() != null && current.getCause() != current && depth < 16) {
-            current = current.getCause();
-            depth++;
-        }
-        return current;
+        return ErrorCategories.from(error, statusCode != null ? statusCode.value() : null);
     }
 
     private record EffectiveApi(String httpMethod, String pathTemplate, long timeoutMs) {}

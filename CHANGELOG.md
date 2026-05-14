@@ -9,8 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.16.0] - 2026-05-14
+
 ### Added
 
+- **Resilience4j rate-limiter support.** Added optional `RateLimiterRegistry`
+  integration, client-level `resilience.rate-limiter` configuration, and
+  method-level `@RateLimiter` overrides with startup validation.
+- **Rate-limiter metrics binding.** When `resilience4j-micrometer` and a
+  `RateLimiterRegistry` bean are present, the starter now registers
+  `reactiveHttpRateLimiterMeterBinder` for tagged Resilience4j rate-limiter
+  metrics.
 - **Composite HTTP client observation.** Multiple `HttpClientObserver` beans now
   run for each exchange, with failures isolated per observer. The Micrometer and
   OpenTelemetry built-ins are registered as named observers so metrics and spans
@@ -20,9 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `server.address` and `server.port` when available, and Micrometer can include
   those tags with `reactive.http.observability.include-server-address=true`
   (default `false` to avoid high-cardinality metric labels).
+- **TLS integration coverage.** Added an HTTPS integration test with an
+  in-process self-signed server to verify trusted and untrusted TLS paths.
+- **Error category extraction helper.** Added `ErrorCategories` so application
+  business logic can extract `ErrorCategory` from starter exceptions and common
+  wrapped network failures.
+- **Examples documentation.** Added `docs/examples/` snippets for OAuth2,
+  Resilience4j, OpenTelemetry propagation, multipart upload, streaming, and
+  test-helper usage without a live server.
 
 ### Changed
 
+- **Resilience operator ordering documented.** Resilience is now documented as
+  `retry -> rate-limiter -> circuit-breaker -> bulkhead`.
 - **Observer override semantics documented.** User `HttpClientObserver` beans now
   run alongside built-ins. Override built-ins by registering beans named
   `micrometerHttpClientObserver` or `openTelemetryHttpClientObserver`.
@@ -703,7 +724,9 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.15.0...v1.16.0
+[1.15.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.12.1...v1.13.0

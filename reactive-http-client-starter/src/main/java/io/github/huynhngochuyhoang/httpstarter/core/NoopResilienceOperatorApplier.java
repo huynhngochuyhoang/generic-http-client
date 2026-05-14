@@ -37,4 +37,14 @@ public class NoopResilienceOperatorApplier implements ResilienceOperatorApplier 
     public <T> Flux<T> applyBulkhead(Flux<T> flux, String instanceName) {
         return flux;
     }
+
+    @Override
+    public <T> Mono<T> applyRateLimiter(Mono<T> mono, String instanceName) {
+        return mono;
+    }
+
+    @Override
+    public <T> Flux<T> applyRateLimiter(Flux<T> flux, String instanceName) {
+        return flux;
+    }
 }

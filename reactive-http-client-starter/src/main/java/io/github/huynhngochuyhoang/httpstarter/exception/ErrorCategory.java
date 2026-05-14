@@ -8,10 +8,10 @@ package io.github.huynhngochuyhoang.httpstarter.exception;
  *
  * <pre>{@code
  * client.getUser("123")
- *     .onErrorResume(HttpClientException.class, ex -> switch (ex.getErrorCategory()) {
+ *     .onErrorResume(error -> switch (ErrorCategories.from(error)) {
  *         case RATE_LIMITED -> rateLimitFallback();
- *         case CLIENT_ERROR -> Mono.error(new BadRequestException(ex));
- *         default           -> Mono.error(ex);
+ *         case CLIENT_ERROR -> Mono.error(new BadRequestException(error));
+ *         default           -> Mono.error(error);
  *     });
  * }</pre>
  */

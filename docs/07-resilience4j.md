@@ -1,6 +1,6 @@
 # Resilience4j Integration
 
-The starter provides opt-in Resilience4j support per client: retry, circuit breaker, and bulkhead. Individual methods can override the client-level instance names.
+The starter provides opt-in Resilience4j support per client: retry, rate limiter, circuit breaker, and bulkhead. Individual methods can override the client-level instance names.
 
 ---
 
@@ -32,6 +32,7 @@ reactive:
           enabled: true
           circuit-breaker: user-service   # Resilience4j instance name
           retry: user-service
+          rate-limiter: user-service
           bulkhead: user-service
           retry-methods: [GET, HEAD]      # only these verbs are retried
           timeout-ms: 5000                # per-request timeout (0 = disabled)
@@ -99,9 +100,35 @@ resilience4j:
 
 ---
 
+## Rate limiter
+
+```yaml
+resilience4j:
+  ratelimiter:
+    instances:
+      user-service:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 0
+```
+
+---
+
+## Operator ordering
+
+The starter applies the native request timeout first, then resilience operators in this order:
+
+```text
+retry -> rate-limiter -> circuit-breaker -> bulkhead
+```
+
+With this ordering, the rate limiter wraps the retried operation at the starter layer instead of being treated as another timeout or bulkhead setting.
+
+---
+
 ## Per-method overrides
 
-One client often fronts several endpoints with different resilience requirements. The `@Retry`, `@CircuitBreaker`, and `@Bulkhead` annotations let a single method opt into a different Resilience4j instance:
+One client often fronts several endpoints with different resilience requirements. The `@Retry`, `@RateLimiter`, `@CircuitBreaker`, and `@Bulkhead` annotations let a single method opt into a different Resilience4j instance:
 
 ```java
 @ReactiveHttpClient(name = "user-service")
@@ -113,6 +140,7 @@ public interface UserApi {
     Mono<User> getUser(@PathVar("id") long id);
 
     @POST("/users")
+    @RateLimiter("user-write-rate-limiter")
     @Bulkhead("user-write-bulkhead")    // limit concurrent writes
     Mono<User> createUser(@Body NewUser body);
 }
@@ -135,11 +163,17 @@ resilience4j:
     instances:
       user-write-bulkhead:
         max-concurrent-calls: 10
+  ratelimiter:
+    instances:
+      user-write-rate-limiter:
+        limit-for-period: 25
+        limit-refresh-period: 1s
+        timeout-duration: 0
 ```
 
 ### Important: instance validation at startup
 
-All instance names referenced by `@Retry`, `@CircuitBreaker`, and `@Bulkhead` are validated when the proxy is constructed. If any instance is missing, the starter fails fast with an `IllegalStateException` that lists every missing instance name. This prevents typos from silently falling back to a default-configured instance.
+All instance names referenced by `@Retry`, `@RateLimiter`, `@CircuitBreaker`, and `@Bulkhead` are validated when the proxy is constructed. If any instance is missing, the starter fails fast with an `IllegalStateException` that lists every missing instance name. This prevents typos from silently falling back to a default-configured instance.
 
 Per-method annotations are still gated on the client having `resilience.enabled: true`. Methods without an override inherit the client-level config.
 
@@ -147,12 +181,13 @@ Per-method annotations are still gated on the client having `resilience.enabled:
 
 ## Resilience4j metrics
 
-When both `micrometer-core` and `resilience4j-micrometer` are on the classpath, and the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, or `BulkheadRegistry` as beans, the starter auto-binds Resilience4j metrics to the shared `MeterRegistry`:
+When both `micrometer-core` and `resilience4j-micrometer` are on the classpath, and the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, `BulkheadRegistry`, or `RateLimiterRegistry` as beans, the starter auto-binds Resilience4j metrics to the shared `MeterRegistry`:
 
 | Metric prefix | Data exposed |
 |---|---|
 | `resilience4j.circuitbreaker.*` | State (open/half_open/closed), calls, failure rate |
 | `resilience4j.retry.*` | Successful / failed attempts, with / without retry |
 | `resilience4j.bulkhead.*` | Available concurrent calls, max concurrent calls |
+| `resilience4j.ratelimiter.*` | Available permissions, waiting threads |
 
-To disable the binding for a specific registry, declare your own `MeterBinder` bean named `reactiveHttpCircuitBreakerMeterBinder` (or the retry / bulkhead equivalent).
+To disable the binding for a specific registry, declare your own `MeterBinder` bean named `reactiveHttpCircuitBreakerMeterBinder` (or the retry / bulkhead / rate-limiter equivalent).

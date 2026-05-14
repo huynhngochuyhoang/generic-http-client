@@ -21,6 +21,7 @@ A Spring Boot starter for building **declarative reactive HTTP clients** (annota
 | [Quick Start](docs/01-quick-start.md) | Add the dependency, declare a client, and inject it |
 | [Annotation Reference](docs/02-annotations.md) | All annotations with examples |
 | [Error Handling](docs/03-error-handling.md) | Exception hierarchy, error categories, and reactive operators |
+| [Examples](docs/examples/README.md) | Copy-pasteable snippets for common setup patterns |
 | [Timeouts](docs/04-timeouts.md) | Timeout layers, precedence model, and per-method override |
 | [Connection Pool](docs/05-connection-pool.md) | Pool tuning, per-client overrides, and pool metrics |
 | [Outbound Auth Providers](docs/06-auth-providers.md) | Bearer, OAuth2, HMAC, API key, and custom providers |
@@ -48,7 +49,7 @@ Spring's `@HttpExchange` gives you declarative HTTP mapping and nothing more. **
 | Client-level config model | `reactive.http.clients.<name>` and global `reactive.http.network` | No equivalent built-in config namespace |
 | Timeout precedence model | Method-level `@TimeoutMs` over config timeout | No built-in timeout precedence contract |
 | Error classification contract | Built-in `HttpClientException` / `RemoteServiceException` + categories | No built-in domain error categorization |
-| Resilience4j integration | Built-in opt-in (retry/circuit-breaker/bulkhead) per client | Not built-in; app wires resilience manually |
+| Resilience4j integration | Built-in opt-in (retry/rate-limiter/circuit-breaker/bulkhead) per client | Not built-in; app wires resilience manually |
 | Outbound auth strategy | Per-client `AuthProvider` + built-in token refresh provider | Not built-in; app implements filters/interceptors |
 | Correlation ID propagation | Built-in support | App-level implementation |
 | Micrometer observability contract | Built-in observer with stable tags | Basic instrumentation is app/framework-dependent |
@@ -73,7 +74,7 @@ Spring's `@HttpExchange` gives you declarative HTTP mapping and nothing more. **
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.15.0</version>
+  <version>1.16.0</version>
 </dependency>
 ```
 
@@ -461,7 +462,7 @@ Each proxy invocation follows this pipeline:
    - 4xx -> `HttpClientException`
    - 5xx -> `RemoteServiceException`
 5. Apply timeout (priority: `@TimeoutMs` > `resilience.timeout-ms`) per attempt.
-6. Apply resilience (if enabled): retry -> circuit-breaker -> bulkhead.
+6. Apply resilience (if enabled): retry -> rate-limiter -> circuit-breaker -> bulkhead.
 7. Emit observability event (if observer is configured).
 
 ---
@@ -483,6 +484,7 @@ Each proxy invocation follows this pipeline:
 | `@ApiName("...")` | Method | Logical API name for metrics/tracing |
 | `@TimeoutMs(ms)` | Method | Method-level timeout override (`0` disables timeout for that method) |
 | `@Retry("instance")` | Method | Per-method Resilience4j Retry instance — overrides `resilience.retry` |
+| `@RateLimiter("instance")` | Method | Per-method Resilience4j RateLimiter instance — overrides `resilience.rate-limiter` |
 | `@CircuitBreaker("instance")` | Method | Per-method Resilience4j CircuitBreaker instance — overrides `resilience.circuit-breaker` |
 | `@Bulkhead("instance")` | Method | Per-method Resilience4j Bulkhead instance — overrides `resilience.bulkhead` |
 | `@LogHttpExchange` | Method / Interface | Request/response log hook via `HttpExchangeLogger` |
@@ -506,6 +508,10 @@ Both main exception types expose:
 - `getResponseBody()`
 - `getErrorCategory()`
 
+For shared business error handling, use `ErrorCategories.from(Throwable)` to
+extract the same category from starter exceptions and common wrapped network
+failures.
+
 ---
 
 ## 6) Resilience4j integration
@@ -523,11 +529,12 @@ reactive:
           enabled: true
           retry: user-service
           retry-methods: [GET, HEAD, PUT]
+          rate-limiter: user-service
 ```
 
 ### Per-method overrides
 
-One client typically fronts several endpoints with different sensitivity to retry / circuit-breaker / bulkhead policy — e.g. a hot read path vs. an expensive write. The `@Retry` / `@CircuitBreaker` / `@Bulkhead` annotations let a single method opt into a different Resilience4j instance:
+One client typically fronts several endpoints with different sensitivity to retry / rate-limiter / circuit-breaker / bulkhead policy — e.g. a hot read path vs. an expensive write. The `@Retry` / `@RateLimiter` / `@CircuitBreaker` / `@Bulkhead` annotations let a single method opt into a different Resilience4j instance:
 
 ```java
 @ReactiveHttpClient(name = "user-service")
@@ -539,13 +546,14 @@ public interface UserApi {
     Mono<User> getUser(@PathVar("id") long id);
 
     @POST("/users")
+    @RateLimiter("user-write-rate-limiter")    // throttle write traffic
     @Bulkhead("user-write-bulkhead")       // limit concurrent writes
     Mono<User> createUser(@Body NewUser body);
 }
 ```
 
 Per-method instance names take precedence over the client-level
-`resilience.retry` / `.circuit-breaker` / `.bulkhead` settings. An instance referenced by an annotation **must** be configured (e.g. under `resilience4j.retry.instances.user-read-retry` in `application.yml`); the starter walks every annotated method at proxy-construction time and fails fast with a descriptive `IllegalStateException` listing every missing instance, so a typo can't silently fall back to a default-configured instance.
+`resilience.retry` / `.rate-limiter` / `.circuit-breaker` / `.bulkhead` settings. An instance referenced by an annotation **must** be configured (e.g. under `resilience4j.retry.instances.user-read-retry` in `application.yml`); the starter walks every annotated method at proxy-construction time and fails fast with a descriptive `IllegalStateException` listing every missing instance, so a typo can't silently fall back to a default-configured instance.
 
 Per-method annotations are still gated on the client having `resilience.enabled = true`. Methods without an override inherit the client-level config, exactly as before.
 
@@ -699,13 +707,14 @@ alongside them. To replace a built-in, register a bean with the same name.
 
 ### Resilience4j metrics
 
-When both `micrometer-core` and `io.github.resilience4j:resilience4j-micrometer` are on the classpath **and** the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, `BulkheadRegistry` as beans, the starter auto-binds Resilience4j's tagged metrics to the shared `MeterRegistry`:
+When both `micrometer-core` and `io.github.resilience4j:resilience4j-micrometer` are on the classpath **and** the application registers any of `CircuitBreakerRegistry`, `RetryRegistry`, `BulkheadRegistry`, `RateLimiterRegistry` as beans, the starter auto-binds Resilience4j's tagged metrics to the shared `MeterRegistry`:
 
 - `resilience4j.circuitbreaker.*` — state (`open`/`half_open`/`closed`), calls, buffered calls, failure rate.
 - `resilience4j.retry.*` — successful / failed attempts, with / without retry.
 - `resilience4j.bulkhead.*` — available concurrent calls, max concurrent calls.
+- `resilience4j.ratelimiter.*` — available permissions, waiting threads.
 
-The bindings skip automatically if any of the three conditions isn't met. To disable for a specific registry, declare your own `MeterBinder` with the name `reactiveHttpCircuitBreakerMeterBinder` (or the retry / bulkhead equivalent).
+The bindings skip automatically if any required condition isn't met. To disable for a specific registry, declare your own `MeterBinder` with the name `reactiveHttpCircuitBreakerMeterBinder` (or the retry / bulkhead / rate-limiter equivalent).
 
 ### Observability configuration
 

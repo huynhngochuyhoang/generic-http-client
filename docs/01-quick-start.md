@@ -12,7 +12,7 @@
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>1.15.0</version>
+  <version>1.16.0</version>
 </dependency>
 ```
 
@@ -180,6 +180,7 @@ reactive:
           circuit-breaker: user-service
           retry: user-service
           retry-methods: [GET, HEAD]
+          rate-limiter: user-service
           bulkhead: user-service
           timeout-ms: 0
     observability:

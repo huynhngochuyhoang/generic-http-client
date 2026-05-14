@@ -542,6 +542,8 @@ public class ReactiveHttpClientProperties {
         private Set<String> retryMethods = new LinkedHashSet<>(Set.of("GET", "HEAD"));
         /** Name of the Resilience4j Bulkhead instance. */
         private String bulkhead = "default";
+        /** Name of the Resilience4j RateLimiter instance. */
+        private String rateLimiter = "default";
         /** Request timeout in milliseconds (0 = disabled). */
         private long timeoutMs = 0;
 
@@ -572,6 +574,9 @@ public class ReactiveHttpClientProperties {
 
         public String getBulkhead() { return bulkhead; }
         public void setBulkhead(String bulkhead) { this.bulkhead = bulkhead; }
+
+        public String getRateLimiter() { return rateLimiter; }
+        public void setRateLimiter(String rateLimiter) { this.rateLimiter = rateLimiter; }
 
         public long getTimeoutMs() { return timeoutMs; }
         public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }

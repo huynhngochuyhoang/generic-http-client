@@ -16,9 +16,9 @@ Roadmap bucket: `2. Features to optimize`.
   - DEBUG-log applied `WebClientCustomizer` classes per builder and `ReactiveHttpClientCustomizer` classes per client.
   - Document built-in filter order.
   - Test OTel/header preservation and customizer ordering.
-- [ ] **2.4 Documentation and examples package**
+- [x] **2.4 Documentation and examples package**
   - Add OAuth2, Resilience4j, OTel propagation, multipart, streaming, and test-helper examples.
-  - Decide whether examples compile in CI.
+  - Decide whether examples compile in CI. Decision: snippets under `docs/examples/`, not compiled in CI.
 
 ## Verification
 

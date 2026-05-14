@@ -1,15 +1,12 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
-import io.github.huynhngochuyhoang.httpstarter.annotation.Bulkhead;
-import io.github.huynhngochuyhoang.httpstarter.annotation.CircuitBreaker;
-import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
-import io.github.huynhngochuyhoang.httpstarter.annotation.ApiRef;
-import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
-import io.github.huynhngochuyhoang.httpstarter.annotation.Retry;
+import io.github.huynhngochuyhoang.httpstarter.annotation.*;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.junit.jupiter.api.Test;
@@ -37,6 +34,7 @@ class PerMethodResilienceTest {
         assertThat(meta.getRetryInstanceName()).isEqualTo("hot-retry");
         assertThat(meta.getCircuitBreakerInstanceName()).isEqualTo("hot-cb");
         assertThat(meta.getBulkheadInstanceName()).isEqualTo("hot-bulkhead");
+        assertThat(meta.getRateLimiterInstanceName()).isEqualTo("hot-rate-limiter");
     }
 
     @Test
@@ -67,6 +65,7 @@ class PerMethodResilienceTest {
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RETRY, "anything")).isTrue();
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.CIRCUIT_BREAKER, "anything")).isTrue();
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.BULKHEAD, "anything")).isTrue();
+        assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RATE_LIMITER, "anything")).isTrue();
     }
 
     @Test
@@ -77,8 +76,11 @@ class PerMethodResilienceTest {
         cbRegistry.circuitBreaker("explicit-cb");
         BulkheadRegistry bhRegistry = BulkheadRegistry.of(BulkheadConfig.ofDefaults());
         bhRegistry.bulkhead("explicit-bh");
+        RateLimiterRegistry rateLimiterRegistry = RateLimiterRegistry.of(RateLimiterConfig.ofDefaults());
+        rateLimiterRegistry.rateLimiter("explicit-rl");
 
-        Resilience4jOperatorApplier applier = new Resilience4jOperatorApplier(cbRegistry, retryRegistry, bhRegistry);
+        Resilience4jOperatorApplier applier = new Resilience4jOperatorApplier(
+                cbRegistry, retryRegistry, bhRegistry, rateLimiterRegistry);
 
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RETRY, "explicitly-configured")).isTrue();
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RETRY, "missing")).isFalse();
@@ -88,12 +90,15 @@ class PerMethodResilienceTest {
 
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.BULKHEAD, "explicit-bh")).isTrue();
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.BULKHEAD, "missing")).isFalse();
+
+        assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RATE_LIMITER, "explicit-rl")).isTrue();
+        assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.RATE_LIMITER, "missing")).isFalse();
     }
 
     @Test
     void blankInstanceNameAlwaysReportsConfigured() {
         Resilience4jOperatorApplier applier = new Resilience4jOperatorApplier(
-                CircuitBreakerRegistry.ofDefaults(), null, null);
+                CircuitBreakerRegistry.ofDefaults(), null, null, null);
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.CIRCUIT_BREAKER, null)).isTrue();
         assertThat(applier.isInstanceConfigured(ResilienceOperatorApplier.InstanceType.CIRCUIT_BREAKER, "")).isTrue();
     }
@@ -103,9 +108,12 @@ class PerMethodResilienceTest {
         // Registry has only "real-retry"; the test interface references "ghost-retry"
         RetryRegistry retryRegistry = RetryRegistry.of(RetryConfig.ofDefaults());
         retryRegistry.retry("real-retry");
+        RateLimiterRegistry rateLimiterRegistry = RateLimiterRegistry.of(RateLimiterConfig.ofDefaults());
+        rateLimiterRegistry.rateLimiter("real-rate-limiter");
 
         GenericApplicationContext ctx = new GenericApplicationContext();
         ctx.getBeanFactory().registerSingleton("retryRegistry", retryRegistry);
+        ctx.getBeanFactory().registerSingleton("rateLimiterRegistry", rateLimiterRegistry);
         ctx.refresh();
 
         ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
@@ -124,7 +132,8 @@ class PerMethodResilienceTest {
         assertThatThrownBy(factory::getObject)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("undefined Resilience4j instances")
-                .hasMessageContaining("@Retry(\"ghost-retry\")");
+                .hasMessageContaining("@Retry(\"ghost-retry\")")
+                .hasMessageContaining("@RateLimiter(\"ghost-rate-limiter\")");
 
         ctx.close();
     }
@@ -230,6 +239,7 @@ class PerMethodResilienceTest {
         @Retry("hot-retry")
         @CircuitBreaker("hot-cb")
         @Bulkhead("hot-bulkhead")
+        @RateLimiter("hot-rate-limiter")
         Mono<String> hotPath();
     }
 
@@ -243,6 +253,7 @@ class PerMethodResilienceTest {
     interface MissingInstanceClient {
         @GET("/x")
         @Retry("ghost-retry")
+        @RateLimiter("ghost-rate-limiter")
         Mono<String> ghost();
     }
 
