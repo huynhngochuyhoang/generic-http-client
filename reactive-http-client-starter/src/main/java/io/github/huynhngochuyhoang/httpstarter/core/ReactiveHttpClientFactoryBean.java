@@ -223,7 +223,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                             resolvedNetworkConfig.getNetworkWriteTimeoutMs(), TimeUnit.MILLISECONDS));
                 })
                 .compress(config.isCompressionEnabled());
-        httpClient = applyHttpProtocol(httpClient, config);
+        httpClient = applyHttpProtocol(httpClient, config, baseUrl);
 
         ReactiveHttpClientProperties.ProxyConfig proxy = resolveProxy(config, resolvedNetworkConfig);
         if (proxy != null && proxy.getType() != ReactiveHttpClientProperties.ProxyConfig.Type.NONE
@@ -276,11 +276,12 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         return configured.build();
     }
 
-    static HttpClient applyHttpProtocol(HttpClient httpClient, ReactiveHttpClientProperties.ClientConfig config) {
+    static HttpClient applyHttpProtocol(HttpClient httpClient,
+                                        ReactiveHttpClientProperties.ClientConfig config,
+                                        String baseUrl) {
         if (!config.isHttp2Enabled()) {
             return httpClient;
         }
-        String baseUrl = config.getBaseUrl();
         boolean clearText = baseUrl != null
                 && baseUrl.regionMatches(true, 0, "http://", 0, "http://".length());
         HttpProtocol protocol = clearText ? HttpProtocol.H2C : HttpProtocol.H2;

@@ -15,7 +15,7 @@ class ReactiveHttpClientFactoryBeanHttpProtocolTest {
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
         HttpClient original = HttpClient.create();
 
-        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(original, config);
+        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(original, config, null);
 
         assertSame(original, configured);
     }
@@ -25,7 +25,7 @@ class ReactiveHttpClientFactoryBeanHttpProtocolTest {
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
         config.setHttp2Enabled(true);
 
-        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(HttpClient.create(), config);
+        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(HttpClient.create(), config, null);
 
         assertThat(configured.configuration().protocols()).containsExactly(HttpProtocol.H2);
     }
@@ -36,7 +36,8 @@ class ReactiveHttpClientFactoryBeanHttpProtocolTest {
         config.setBaseUrl("https://example.com");
         config.setHttp2Enabled(true);
 
-        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(HttpClient.create(), config);
+        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(
+                HttpClient.create(), config, config.getBaseUrl());
 
         assertThat(configured.configuration().protocols()).containsExactly(HttpProtocol.H2);
     }
@@ -47,7 +48,20 @@ class ReactiveHttpClientFactoryBeanHttpProtocolTest {
         config.setBaseUrl("http://example.com");
         config.setHttp2Enabled(true);
 
-        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(HttpClient.create(), config);
+        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(
+                HttpClient.create(), config, config.getBaseUrl());
+
+        assertThat(configured.configuration().protocols()).containsExactly(HttpProtocol.H2C);
+    }
+
+    @Test
+    void usesResolvedBaseUrlWhenConfiguredBaseUrlDiffers() {
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setBaseUrl("https://configured.example.com");
+        config.setHttp2Enabled(true);
+
+        HttpClient configured = ReactiveHttpClientFactoryBean.applyHttpProtocol(
+                HttpClient.create(), config, "http://annotation.example.com");
 
         assertThat(configured.configuration().protocols()).containsExactly(HttpProtocol.H2C);
     }
