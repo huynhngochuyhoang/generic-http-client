@@ -277,17 +277,6 @@
       "defaultValue": false
     },
     {
-      "name": "reactive.http.clients.[name].log-body",
-      "type": "java.lang.Boolean",
-      "description": "Deprecated. Use log-exchange instead.",
-      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig",
-      "deprecation": {
-        "replacement": "reactive.http.clients.[name].log-exchange",
-        "reason": "Replaced by log-exchange for clarity.",
-        "level": "warning"
-      }
-    },
-    {
       "name": "reactive.http.clients.[name].auth-provider",
       "type": "java.lang.String",
       "description": "Bean name of the AuthProvider to inject for this client. Leave empty to disable automatic auth. Default: empty.",

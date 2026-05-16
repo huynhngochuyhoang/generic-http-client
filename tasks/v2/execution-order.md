@@ -11,7 +11,7 @@ Current baseline: `v1.14.0` (2026-05-12).
 | Done | 3 | `2.1` + `1.3` + `3.4` | [Observability deepening](observability-deepening.md) | Observer event expansion and composite observer work should be designed together. | Observer compatibility and OTel attribute tests pass. |
 | Done | 4 | `3.1` | [TLS integration tests](tls-integration-tests.md) | Pure hardening with low product risk. | TLS integration test uses a real self-signed peer and passes. |
 | Done | 5 | `1.5` | [Features to add](01-features-to-add.md) | Rate-limiter support is useful, but should follow observer/auth work unless a user need appears first. | Rate-limiter behavior and configuration tests pass. |
-| Partial | 6 | `1.4` + `2.4` | [JUnit 5 test extension](junit5-test-extension.md), [Features to optimize](02-features-to-optimize.md) | Documentation examples are ready for this release; the JUnit 5 extension remains pending. | Examples are documented; extension tests remain pending. |
-| Pending | 7 | `3.2` | [2.0 cleanup](2.0-cleanup.md) | Hold for the `2.0.0` breaking-change release. | Deprecated `log-body` compatibility is removed with migration docs. |
+| Done | 6 | `1.4` + `2.4` | [JUnit 5 test extension](junit5-test-extension.md), [Features to optimize](02-features-to-optimize.md) | Documentation examples and the JUnit 5 extension are ready for this release. | Examples are documented; extension tests pass. |
+| Done | 7 | `3.2` | [2.0 cleanup](2.0-cleanup.md) | Completed for the `2.0.0` breaking-change release. | Deprecated `log-body` compatibility is removed with migration docs. |
 
 Run at least `mvn test` before release-candidate commits.

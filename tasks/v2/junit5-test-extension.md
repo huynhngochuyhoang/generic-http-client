@@ -13,8 +13,8 @@ Suggested release: later 1.x, after consumer demand is clear.
 
 ## Acceptance
 
-- [ ] Annotation and extension classes are implemented.
-- [ ] At least one end-to-end consuming test demonstrates field injection and matcher registration.
-- [ ] Dependency scope does not force JUnit 5 onto non-JUnit consumers unless intentionally accepted.
-- [ ] README and `docs/14-test-helpers.md` include usage examples.
-- [ ] `mvn test` passes.
+- [x] Annotation and extension classes are implemented.
+- [x] At least one end-to-end consuming test demonstrates field injection and matcher registration.
+- [x] Dependency scope does not force JUnit 5 onto non-JUnit consumers unless intentionally accepted.
+- [x] README and `docs/14-test-helpers.md` include usage examples.
+- [x] `mvn test` passes.

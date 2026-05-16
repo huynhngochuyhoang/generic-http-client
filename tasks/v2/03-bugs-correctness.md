@@ -8,7 +8,7 @@ Roadmap bucket: `3. Bugs / correctness to fix`.
   - Add local HTTPS server.
   - Cover trusted and untrusted certificate paths.
   - Keep tests network-free and fast.
-- [ ] **3.2 Remove deprecated `log-body` property**
+- [x] **3.2 Remove deprecated `log-body` property**
   - Hold for `2.0.0`.
   - Remove property, metadata, and compatibility branch.
   - Add migration note.

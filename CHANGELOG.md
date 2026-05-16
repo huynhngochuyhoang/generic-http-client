@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-05-16
+
+### Added
+
+- **JUnit 5 mock HTTP extension.** Added `@MockHttpServer` and
+  `MockHttpServerExtension` in `reactive-http-client-test` for fresh
+  `MockReactiveHttpClient<T>` field injection before each test method.
+
+### Removed
+
+- **Deprecated `log-body` client property.** Removed
+  `reactive.http.clients.*.log-body` compatibility. Use
+  `reactive.http.clients.*.log-exchange` for client-wide exchange logging.
+
+---
+
 ## [1.16.0] - 2026-05-14
 
 ### Added
@@ -724,7 +740,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...v2.0.0
 [1.16.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.13.1...v1.14.0

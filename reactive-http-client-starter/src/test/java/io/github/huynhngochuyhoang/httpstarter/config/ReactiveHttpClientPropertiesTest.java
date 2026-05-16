@@ -9,13 +9,7 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ReactiveHttpClientPropertiesTest {
 
@@ -31,7 +25,6 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isCompressionEnabled());
         assertFalse(config.isLogExchange());
         assertFalse(config.isExchangeLoggingEnabled());
-        assertFalse(config.isLogBody());
         assertNull(config.getAuthProvider());
         assertNull(config.getAuth());
         assertNotNull(config.getApis());
@@ -71,13 +64,10 @@ class ReactiveHttpClientPropertiesTest {
     }
 
     @Test
-    void shouldTreatLegacyLogBodyAsAliasForExchangeLogging() {
+    void shouldUseLogExchangeForExchangeLogging() {
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
 
-        config.setLogBody(true);
-        assertTrue(config.isExchangeLoggingEnabled());
-
-        config.setLogBody(false);
+        assertFalse(config.isExchangeLoggingEnabled());
         config.setLogExchange(true);
         assertTrue(config.isExchangeLoggingEnabled());
     }

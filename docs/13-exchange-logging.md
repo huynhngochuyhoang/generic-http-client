@@ -66,6 +66,8 @@ reactive:
         log-exchange: true
 ```
 
+`log-exchange` is the only configuration property for client-wide exchange logging in 2.0.0. Replace any older `log-body: true` setting with `log-exchange: true`.
+
 ---
 
 ## `HttpExchangeLogContext`

@@ -326,8 +326,6 @@ public class ReactiveHttpClientProperties {
         private int codecMaxInMemorySizeMb = 2;
         private boolean compressionEnabled = false;
         private boolean logExchange = false;
-        @Deprecated
-        private Boolean logBody;
         /**
          * Bean name of {@code AuthProvider} to use for this client.
          * Empty means no automatic auth injection.
@@ -375,23 +373,8 @@ public class ReactiveHttpClientProperties {
         public boolean isLogExchange() { return logExchange; }
         public void setLogExchange(boolean logExchange) { this.logExchange = logExchange; }
 
-        /**
-         * @deprecated use {@code log-exchange} / {@link #isLogExchange()} instead.
-         */
-        @Deprecated
-        @DeprecatedConfigurationProperty(
-                replacement = "reactive.http.clients.[name].log-exchange",
-                since = "1.9.0")
-        public boolean isLogBody() { return Boolean.TRUE.equals(logBody); }
-
-        /**
-         * @deprecated use {@code log-exchange} / {@link #setLogExchange(boolean)} instead.
-         */
-        @Deprecated
-        public void setLogBody(boolean logBody) { this.logBody = logBody; }
-
         public boolean isExchangeLoggingEnabled() {
-            return logExchange || Boolean.TRUE.equals(logBody);
+            return logExchange;
         }
 
         public String getAuthProvider() { return authProvider; }
