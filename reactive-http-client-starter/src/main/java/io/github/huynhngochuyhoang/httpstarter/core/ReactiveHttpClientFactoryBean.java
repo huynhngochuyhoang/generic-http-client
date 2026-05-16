@@ -277,9 +277,14 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     }
 
     static HttpClient applyHttpProtocol(HttpClient httpClient, ReactiveHttpClientProperties.ClientConfig config) {
-        return config.isHttp2Enabled()
-                ? httpClient.protocol(HttpProtocol.H2)
-                : httpClient;
+        if (!config.isHttp2Enabled()) {
+            return httpClient;
+        }
+        String baseUrl = config.getBaseUrl();
+        boolean clearText = baseUrl != null
+                && baseUrl.regionMatches(true, 0, "http://", 0, "http://".length());
+        HttpProtocol protocol = clearText ? HttpProtocol.H2C : HttpProtocol.H2;
+        return httpClient.protocol(protocol);
     }
 
     private ReactiveHttpClientProperties.ConnectionPoolConfig resolveConnectionPool(
