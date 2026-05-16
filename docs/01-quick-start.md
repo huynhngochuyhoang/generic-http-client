@@ -174,6 +174,7 @@ reactive:
         #     client-secret: ${USER_SERVICE_CLIENT_SECRET}
         codec-max-in-memory-size-mb: 2
         compression-enabled: false
+        http2-enabled: false
         log-exchange: false
         resilience:
           enabled: true

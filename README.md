@@ -58,7 +58,7 @@ class UserService {
 | Auth | Per-client `AuthProvider`, OAuth2 client credentials, AWS SigV4 |
 | Resilience | Optional Resilience4j retry, circuit breaker, bulkhead, rate limiter |
 | Observability | Micrometer metrics, health indicator, OpenTelemetry module |
-| Network | Connection pool tuning, HTTP proxy, TLS/mTLS |
+| Network | Connection pool tuning, HTTP/2 opt-in, HTTP proxy, TLS/mTLS |
 | Testing | `MockReactiveHttpClient`, JUnit 5 `@MockHttpServer`, error assertions |
 
 ---
@@ -121,6 +121,7 @@ reactive:
         base-url: https://api.example.com
         codec-max-in-memory-size-mb: 2
         compression-enabled: false
+        http2-enabled: false
         log-exchange: false
         resilience:
           enabled: true

@@ -325,6 +325,7 @@ public class ReactiveHttpClientProperties {
         private String baseUrl;
         private int codecMaxInMemorySizeMb = 2;
         private boolean compressionEnabled = false;
+        private boolean http2Enabled = false;
         private boolean logExchange = false;
         /**
          * Bean name of {@code AuthProvider} to use for this client.
@@ -369,6 +370,9 @@ public class ReactiveHttpClientProperties {
 
         public boolean isCompressionEnabled() { return compressionEnabled; }
         public void setCompressionEnabled(boolean compressionEnabled) { this.compressionEnabled = compressionEnabled; }
+
+        public boolean isHttp2Enabled() { return http2Enabled; }
+        public void setHttp2Enabled(boolean http2Enabled) { this.http2Enabled = http2Enabled; }
 
         public boolean isLogExchange() { return logExchange; }
         public void setLogExchange(boolean logExchange) { this.logExchange = logExchange; }

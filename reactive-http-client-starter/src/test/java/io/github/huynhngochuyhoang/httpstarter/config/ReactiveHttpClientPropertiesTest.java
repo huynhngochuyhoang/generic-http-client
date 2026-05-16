@@ -23,6 +23,7 @@ class ReactiveHttpClientPropertiesTest {
         assertTrue(config.getResilience().getRetryMethods().contains("HEAD"));
         assertEquals(2, config.getCodecMaxInMemorySizeMb());
         assertFalse(config.isCompressionEnabled());
+        assertFalse(config.isHttp2Enabled());
         assertFalse(config.isLogExchange());
         assertFalse(config.isExchangeLoggingEnabled());
         assertNull(config.getAuthProvider());
@@ -70,6 +71,18 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         config.setLogExchange(true);
         assertTrue(config.isExchangeLoggingEnabled());
+    }
+
+    @Test
+    void shouldBindPerClientHttp2OptIn() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.inventory.http2-enabled", true);
+        yaml.put("reactive.http.clients.users.base-url", "https://users.example");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        assertTrue(bound.getClients().get("inventory").isHttp2Enabled());
+        assertFalse(bound.getClients().get("users").isHttp2Enabled());
     }
 
     @Test

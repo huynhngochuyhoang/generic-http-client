@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JUnit 5 mock HTTP extension.** Added `@MockHttpServer` and
   `MockHttpServerExtension` in `reactive-http-client-test` for fresh
   `MockReactiveHttpClient<T>` field injection before each test method.
+- **Per-client HTTP/2 opt-in.** Added
+  `reactive.http.clients.*.http2-enabled` so a client can use Reactor Netty
+  HTTP/2 without replacing the starter-managed connector in a customizer.
 
 ### Removed
 
