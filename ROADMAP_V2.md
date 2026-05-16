@@ -434,9 +434,9 @@ don't get re-added without a fresh argument:
   global services. Cryptographically heavier (ECDSA P-256). Recommend
   consumers use the official AWS SDK and inject the resulting signed
   request when needed.
-- **HTTP/2 client toggle.** Reactor Netty's `HttpClient.protocol(HttpProtocol.H2)`
-  is one line of configuration in a `WebClientCustomizer`. No starter-level
-  abstraction needed.
+- **Additional HTTP/2 abstractions.** Reactor Netty's HTTP/2 protocol selection is
+  covered by the per-client `http2-enabled` option. More protocol abstractions
+  should require a fresh argument.
 - **Built-in response decompression toggle.** Already exists as
   `reactive.http.clients.*.compression-enabled` since v1.x.
 - **gRPC integration.** Out of scope — different protocol, different abstraction

@@ -9,13 +9,7 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ReactiveHttpClientPropertiesTest {
 
@@ -29,9 +23,9 @@ class ReactiveHttpClientPropertiesTest {
         assertTrue(config.getResilience().getRetryMethods().contains("HEAD"));
         assertEquals(2, config.getCodecMaxInMemorySizeMb());
         assertFalse(config.isCompressionEnabled());
+        assertFalse(config.isHttp2Enabled());
         assertFalse(config.isLogExchange());
         assertFalse(config.isExchangeLoggingEnabled());
-        assertFalse(config.isLogBody());
         assertNull(config.getAuthProvider());
         assertNull(config.getAuth());
         assertNotNull(config.getApis());
@@ -71,15 +65,24 @@ class ReactiveHttpClientPropertiesTest {
     }
 
     @Test
-    void shouldTreatLegacyLogBodyAsAliasForExchangeLogging() {
+    void shouldUseLogExchangeForExchangeLogging() {
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
 
-        config.setLogBody(true);
-        assertTrue(config.isExchangeLoggingEnabled());
-
-        config.setLogBody(false);
+        assertFalse(config.isExchangeLoggingEnabled());
         config.setLogExchange(true);
         assertTrue(config.isExchangeLoggingEnabled());
+    }
+
+    @Test
+    void shouldBindPerClientHttp2OptIn() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.inventory.http2-enabled", true);
+        yaml.put("reactive.http.clients.users.base-url", "https://users.example");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        assertTrue(bound.getClients().get("inventory").isHttp2Enabled());
+        assertFalse(bound.getClients().get("users").isHttp2Enabled());
     }
 
     @Test

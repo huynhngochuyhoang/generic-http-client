@@ -1,11 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.test;
 
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
-import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
-import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
-import io.github.huynhngochuyhoang.httpstarter.core.NoopResilienceOperatorApplier;
-import io.github.huynhngochuyhoang.httpstarter.core.ReactiveClientInvocationHandler;
-import io.github.huynhngochuyhoang.httpstarter.core.RequestArgumentResolver;
+import io.github.huynhngochuyhoang.httpstarter.core.*;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -51,10 +48,17 @@ public final class MockReactiveHttpClient<T> {
 
     private final T proxy;
     private final List<RecordedExchange> exchanges;
+    private final List<Matcher> matchers;
+    private final AtomicReference<ClientResponse> fallback;
 
-    private MockReactiveHttpClient(T proxy, List<RecordedExchange> exchanges) {
+    private MockReactiveHttpClient(T proxy,
+                                   List<RecordedExchange> exchanges,
+                                   List<Matcher> matchers,
+                                   AtomicReference<ClientResponse> fallback) {
         this.proxy = proxy;
         this.exchanges = exchanges;
+        this.matchers = matchers;
+        this.fallback = fallback;
     }
 
     /** Returns the proxy implementing {@code T} — invoke its methods to exercise the client. */
@@ -66,6 +70,37 @@ public final class MockReactiveHttpClient<T> {
     /** The most recently recorded exchange, or {@code null} if none. */
     public RecordedExchange lastExchange() {
         return exchanges.isEmpty() ? null : exchanges.get(exchanges.size() - 1);
+    }
+
+    /**
+     * Registers a handler that responds to any request whose URL path equals
+     * {@code path}.
+     */
+    public MockReactiveHttpClient<T> respondToPath(String path, Function<RecordedExchange, ClientResponse> handler) {
+        return respond(ex -> path.equals(ex.uri().getPath()), handler);
+    }
+
+    /**
+     * Registers a handler that responds to any request whose method and path
+     * match.
+     */
+    public MockReactiveHttpClient<T> respondTo(org.springframework.http.HttpMethod method,
+                                               String path,
+                                               Function<RecordedExchange, ClientResponse> handler) {
+        return respond(ex -> method.equals(ex.method()) && path.equals(ex.uri().getPath()), handler);
+    }
+
+    /** Registers a handler behind an arbitrary predicate. */
+    public MockReactiveHttpClient<T> respond(java.util.function.Predicate<RecordedExchange> predicate,
+                                             Function<RecordedExchange, ClientResponse> handler) {
+        matchers.add(new Matcher(predicate, handler));
+        return this;
+    }
+
+    /** Response served when no matcher applies. Defaults to HTTP 404. */
+    public MockReactiveHttpClient<T> fallback(ClientResponse fallback) {
+        this.fallback.set(fallback);
+        return this;
     }
 
     /** Convenience factory producing a JSON response. */
@@ -140,6 +175,8 @@ public final class MockReactiveHttpClient<T> {
 
         public MockReactiveHttpClient<T> build() {
             List<RecordedExchange> exchanges = new CopyOnWriteArrayList<>();
+            List<Matcher> liveMatchers = new CopyOnWriteArrayList<>(matchers);
+            AtomicReference<ClientResponse> fallbackRef = new AtomicReference<>(fallback);
 
             ExchangeFunction exchangeFunction = request -> {
                 MockClientHttpRequest materialized = new MockClientHttpRequest(
@@ -151,12 +188,12 @@ public final class MockReactiveHttpClient<T> {
                                     URI.create(request.url().toString()),
                                     materialized);
                             exchanges.add(exchange);
-                            for (Matcher matcher : matchers) {
+                            for (Matcher matcher : liveMatchers) {
                                 if (matcher.predicate.test(exchange)) {
                                     return matcher.handler.apply(exchange);
                                 }
                             }
-                            return fallback;
+                            return fallbackRef.get();
                         }));
             };
 
@@ -192,7 +229,7 @@ public final class MockReactiveHttpClient<T> {
                     new Class<?>[]{clientInterface},
                     handler);
 
-            return new MockReactiveHttpClient<>(proxy, exchanges);
+            return new MockReactiveHttpClient<>(proxy, exchanges, liveMatchers, fallbackRef);
         }
     }
 

@@ -5,6 +5,10 @@
 one or more reactive HTTP clients **without recreating a raw `WebClient`** and losing
 all starter-managed filters and configuration.
 
+Do not use this hook just to enable HTTP/2. Use
+`reactive.http.clients.<name>.http2-enabled: true` instead, so the starter keeps
+owning the Reactor Netty connector and all network settings still apply.
+
 ---
 
 ## Overview

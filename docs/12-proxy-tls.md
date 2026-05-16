@@ -1,6 +1,23 @@
-# HTTP Proxy and TLS / mTLS
+# HTTP/2, HTTP Proxy, and TLS / mTLS
 
 Both outbound proxy routing and custom TLS/mTLS are configured under the `reactive.http.network` block (global) and can be overridden per client under `reactive.http.clients.<name>`. When a per-client block is present it replaces the global block wholesale — there is no field-level merging.
+
+---
+
+## HTTP/2
+
+HTTP/2 is opt-in per client. Leave it disabled unless the upstream service is known to support HTTP/2.
+
+```yaml
+reactive:
+  http:
+    clients:
+      inventory-service:
+        base-url: https://inventory.example.com
+        http2-enabled: true
+```
+
+This keeps the starter-managed Reactor Netty connector, so global and per-client settings for connection pool, timeouts, compression, proxy, TLS/mTLS, logging, auth, and observability continue to apply.
 
 ---
 

@@ -50,6 +50,32 @@ Requests that do not match any registered matcher fall through to a configurable
 
 ---
 
+## JUnit 5 `@MockHttpServer`
+
+Annotate a `MockReactiveHttpClient<T>` field to get a fresh mock before each JUnit 5 test method:
+
+```java
+class UserServiceTest {
+
+    @MockHttpServer
+    MockReactiveHttpClient<UserService> mock;
+
+    @Test
+    void fetchesUser() {
+        mock.respondTo(HttpMethod.GET, "/users/42",
+                ex -> MockReactiveHttpClient.json(200, "{\"id\":42,\"name\":\"alice\"}"));
+
+        User user = mock.proxy().getUser(42).block();
+
+        assertThat(mock.lastExchange().uri().getPath()).isEqualTo("/users/42");
+    }
+}
+```
+
+The JUnit 5 API dependency is optional in the helper artifact; projects that do not use the extension are not forced to depend on JUnit.
+
+---
+
 ## `RecordedExchange`
 
 Every call through the mock proxy is recorded. `RecordedExchange` exposes:
@@ -144,4 +170,3 @@ class UserServiceTest {
     }
 }
 ```
-
