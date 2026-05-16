@@ -8,6 +8,8 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
+import reactor.netty.http.Http2SslContextSpec;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import reactor.test.StepVerifier;
@@ -49,6 +51,34 @@ class TlsIntegrationTest {
     }
 
     @Test
+    void trustedSelfSignedPeerSucceedsWithHttp2AndCustomTls() throws Exception {
+        SelfSignedCertificate certificate = new SelfSignedCertificate("localhost");
+        DisposableServer server = startHttp2HttpsServer(certificate);
+        Path trustStore = writeTrustStore(certificate.cert(), "changeit");
+        try {
+            ReactiveHttpClientProperties.TlsConfig tls = new ReactiveHttpClientProperties.TlsConfig();
+            tls.setTrustStore("file:" + trustStore.toAbsolutePath());
+            tls.setTrustStorePassword("changeit");
+            tls.setTrustStoreType("PKCS12");
+
+            HttpClient httpClient = TlsContextApplier.apply(
+                    HttpClient.create().protocol(HttpProtocol.H2), tls, "tls-http2-test-client");
+            WebClient client = WebClient.builder()
+                    .baseUrl("https://localhost:" + server.port())
+                    .clientConnector(new ReactorClientHttpConnector(httpClient))
+                    .build();
+
+            StepVerifier.create(client.get().uri("/ping").retrieve().bodyToMono(String.class))
+                    .expectNext("pong")
+                    .verifyComplete();
+        } finally {
+            Files.deleteIfExists(trustStore);
+            server.disposeNow();
+            certificate.delete();
+        }
+    }
+
+    @Test
     void untrustedSelfSignedPeerFailsHandshake() throws Exception {
         SelfSignedCertificate certificate = new SelfSignedCertificate("localhost");
         DisposableServer server = startHttpsServer(certificate);
@@ -65,6 +95,17 @@ class TlsIntegrationTest {
             server.disposeNow();
             certificate.delete();
         }
+    }
+
+    private DisposableServer startHttp2HttpsServer(SelfSignedCertificate certificate) {
+        return HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .protocol(HttpProtocol.H2)
+                .secure(spec -> spec.sslContext(Http2SslContextSpec.forServer(
+                        certificate.certificate(), certificate.privateKey())))
+                .route(routes -> routes.get("/ping", (request, response) -> response.sendString(Mono.just("pong"))))
+                .bindNow();
     }
 
     private DisposableServer startHttpsServer(SelfSignedCertificate certificate) throws Exception {
