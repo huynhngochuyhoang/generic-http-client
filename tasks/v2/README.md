@@ -1,6 +1,6 @@
 # V2 Task Index
 
-Actionable task breakdown for `ROADMAP_V2.md`.
+Actionable task breakdown for [`ROADMAP_V2.md`](../../roadmaps/ROADMAP_V2.md).
 
 Current baseline: `v1.14.0` (2026-05-12).
 

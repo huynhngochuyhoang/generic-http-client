@@ -1,6 +1,6 @@
 # V2 Execution Order
 
-Implementation order for `ROADMAP_V2.md`, based on its suggested execution order.
+Implementation order for [`ROADMAP_V2.md`](../../roadmaps/ROADMAP_V2.md), based on its suggested execution order.
 
 Current baseline: `v1.14.0` (2026-05-12).
 
