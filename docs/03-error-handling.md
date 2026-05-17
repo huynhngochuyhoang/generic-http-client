@@ -35,9 +35,28 @@ Both types expose:
 | `CONNECT_ERROR` | `ConnectException` — TCP connection refused / timed out |
 | `UNKNOWN_HOST` | `UnknownHostException` — DNS resolution failed |
 | `AUTH_PROVIDER_ERROR` | `AuthProviderException` — token fetch / signing failed |
+| `TLS_ERROR` | `SSLException` — TLS handshake or certificate validation failed |
+| `RESILIENCE_ERROR` | Resilience4j rejected the call before it reached the remote service |
 | `RESPONSE_DECODE_ERROR` | Codec/deserialization error on a 2xx response |
 | `CANCELLED` | Reactive subscription cancelled before completion |
 | `UNKNOWN` | Any other uncategorized error |
+
+Published mapping contract:
+
+| Input | Category |
+|---|---|
+| HTTP `429` | `RATE_LIMITED` |
+| Other HTTP `4xx` | `CLIENT_ERROR` |
+| HTTP `5xx` | `SERVER_ERROR` |
+| 2xx response with decode/deserialization failure | `RESPONSE_DECODE_ERROR` |
+| `TimeoutException`, Netty `ReadTimeoutException`, premature close | `TIMEOUT` |
+| `CancellationException` | `CANCELLED` |
+| `AuthProviderException` | `AUTH_PROVIDER_ERROR` |
+| `SSLException` | `TLS_ERROR` |
+| Resilience4j `CallNotPermittedException`, `BulkheadFullException`, or `RequestNotPermitted` | `RESILIENCE_ERROR` |
+| `UnknownHostException` | `UNKNOWN_HOST` |
+| `ConnectException` | `CONNECT_ERROR` |
+| Other throwable | `UNKNOWN` |
 
 ---
 

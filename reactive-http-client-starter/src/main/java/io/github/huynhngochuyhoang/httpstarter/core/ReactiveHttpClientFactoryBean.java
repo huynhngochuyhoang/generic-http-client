@@ -59,10 +59,13 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     public T getObject() {
         ReactiveHttpClient annotation = type.getAnnotation(ReactiveHttpClient.class);
         String clientName = annotation.name();
+        ClientNameValidator.validate(clientName, "@ReactiveHttpClient(name)");
 
         ReactiveHttpClientProperties properties = applicationContext
                 .getBeanProvider(ReactiveHttpClientProperties.class)
                 .getIfAvailable(ReactiveHttpClientProperties::new);
+        properties.getClients().keySet()
+                .forEach(name -> ClientNameValidator.validate(name, "reactive.http.clients"));
 
         ReactiveHttpClientProperties.ClientConfig config = properties.getClients()
                 .getOrDefault(clientName, new ReactiveHttpClientProperties.ClientConfig());
@@ -443,7 +446,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
         log.debug("Reactive HTTP client [{}] startup configuration: baseUrl={} (source={}), protocol={}, poolSource={}, "
                         + "pool=maxConnections:{}, pendingAcquireTimeoutMs:{}, proxy={}, tls={}, auth={}, resilience={}, "
-                        + "observability={}, exchangeLogging={}",
+                        + "observability={}, exchangeLogging={}, logPreset={}",
                 clientName,
                 baseUrl,
                 baseUrlSource,
@@ -456,7 +459,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
                 authSummary(config),
                 resilienceSummary(resilience),
                 observabilityEnabled ? "enabled" : "disabled",
-                config.isExchangeLoggingEnabled() ? "enabled" : "disabled");
+                config.isExchangeLoggingEnabled() ? "enabled" : "disabled",
+                config.getLogPreset().name().toLowerCase(Locale.ROOT).replace('_', '-'));
     }
 
     private static String proxySummary(ReactiveHttpClientProperties.ProxyConfig proxy) {

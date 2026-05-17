@@ -15,6 +15,8 @@ Marks an interface as a reactive HTTP client managed by the starter.
 | `name` | `String` | `""` | Logical client name; must match a key in `reactive.http.clients` |
 | `baseUrl` | `String` | `""` | Hard-coded base URL (overrides the config entry) |
 
+Client names must match `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. This keeps property keys, pool names, metric tags, logs, spans, health output, and exception messages aligned.
+
 Either `name` (resolved from config) or `baseUrl` (literal) must be supplied.
 
 ```java

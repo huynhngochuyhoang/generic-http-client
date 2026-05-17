@@ -1,9 +1,13 @@
 package io.github.huynhngochuyhoang.httpstarter.exception;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.netty.handler.timeout.ReadTimeoutException;
 import org.springframework.core.codec.DecodingException;
 import reactor.netty.http.client.PrematureCloseException;
 
+import javax.net.ssl.SSLException;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.concurrent.CancellationException;
@@ -59,6 +63,14 @@ public final class ErrorCategories {
         }
         if (contains(error, AuthProviderException.class)) {
             return ErrorCategory.AUTH_PROVIDER_ERROR;
+        }
+        if (contains(error, SSLException.class)) {
+            return ErrorCategory.TLS_ERROR;
+        }
+        if (contains(error, CallNotPermittedException.class)
+                || contains(error, BulkheadFullException.class)
+                || contains(error, RequestNotPermitted.class)) {
+            return ErrorCategory.RESILIENCE_ERROR;
         }
         if (contains(error, UnknownHostException.class)) {
             return ErrorCategory.UNKNOWN_HOST;

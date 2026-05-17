@@ -1,5 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
+
 import java.util.List;
 import java.util.Map;
 
@@ -28,5 +30,6 @@ public record HttpExchangeLogContext(
         Map<String, List<String>> responseHeaders,
         Object responseBody,
         long durationMs,
-        Throwable error
+        Throwable error,
+        ReactiveHttpClientProperties.LogPreset logPreset
 ) {}

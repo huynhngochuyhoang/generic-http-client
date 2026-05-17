@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-05-17
+
+### Added
+
+- **Error-category contract coverage.** Added published mappings and tests for
+  HTTP status, decode, timeout, cancellation, DNS, connect, TLS, auth-provider,
+  and Resilience4j rejection failures.
+- **TLS and resilience categories.** Added `TLS_ERROR` and `RESILIENCE_ERROR`
+  to the published `ErrorCategory` model.
+- **Exchange logging presets.** Added
+  `reactive.http.clients.*.log-preset` with `metadata-only`, `headers`, and
+  `bodies` modes for the default exchange logger.
+- **Configuration metadata guardrail.** Added tests that fail when high-value
+  documented `reactive.http.*` properties or defaults disappear from Spring
+  configuration metadata.
+
+### Changed
+
+- **Observable error names are consistent.** Micrometer and OpenTelemetry now
+  verify they emit the same published `ErrorCategory` names.
+- **Client-name validation.** Client names now use the documented
+  `[A-Za-z0-9][A-Za-z0-9._-]{0,127}` pattern so property keys, diagnostics,
+  pool names, metrics, spans, health details, and exception messages stay
+  consistent. Applications with previously invalid names must rename them.
+- **Invocation-path allocation cleanup.** Static method/path/timeout request
+  plans are cached in method metadata instead of rebuilt on every invocation.
+
+### Docs
+
+- Added production checklist and migration-from-`WebClient` reference docs.
+- Documented the published error-category mapping table.
+- Documented `log-preset` behavior and how custom exchange loggers receive the
+  configured preset.
+
+---
+
 ## [2.1.0] - 2026-05-17
 
 ### Added
@@ -784,7 +820,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...v2.0.0
 [1.16.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.15.0...v1.16.0

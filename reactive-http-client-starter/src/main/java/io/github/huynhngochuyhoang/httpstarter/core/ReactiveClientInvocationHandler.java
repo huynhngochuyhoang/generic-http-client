@@ -447,7 +447,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private EffectiveApi resolveEffectiveApi(Method method, MethodMetadata meta) {
         if (meta.getApiRefName() == null) {
-            return new EffectiveApi(meta.getHttpMethod(), meta.getPathTemplate(), MethodMetadata.TIMEOUT_NOT_SET);
+            return meta.getStaticEffectiveApi();
         }
 
         ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
@@ -781,7 +781,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 responseHeaders == null ? Map.of() : responseHeaders,
                 responseBody,
                 System.currentTimeMillis() - startMs,
-                error
+                error,
+                clientConfig.getLogPreset()
         ));
     }
 
@@ -1046,8 +1047,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         return null;
     }
-
-    private record EffectiveApi(String httpMethod, String pathTemplate, long timeoutMs) {}
 
     private record SerializedRequestBody(Object originalBody, Object bodyToWrite, byte[] rawBody) {}
 

@@ -60,65 +60,65 @@
 
 ## Priority 4 — Error-category contract
 
-### [ ] 3.4 Error-category consistency audit
-- [ ] Document the published error-category mapping table.
-- [ ] Add parameterized tests for HTTP status, decode, timeout, cancellation,
+### [x] 3.4 Error-category consistency audit
+- [x] Document the published error-category mapping table.
+- [x] Add parameterized tests for HTTP status, decode, timeout, cancellation,
   DNS, connect, TLS, auth-provider, and resilience failures.
-- [ ] Verify `ErrorCategories.from(Throwable)` agrees with observability tagging.
-- [ ] Verify Micrometer and OpenTelemetry emit the same category names.
-- [ ] Update test-helper assertions if any category semantics are clarified.
+- [x] Verify `ErrorCategories.from(Throwable)` agrees with observability tagging.
+- [x] Verify Micrometer and OpenTelemetry emit the same category names.
+- [x] Update test-helper assertions if any category semantics are clarified.
 
 ---
 
 ## Priority 5 — Documentation and metadata maintainability
 
-### [ ] 2.1 Split README and reference docs by audience
-- [ ] Keep README short and focused on product fit, install, and first use.
-- [ ] Add `docs/16-production-checklist.md`.
-- [ ] Add `docs/17-migration-from-webclient.md`.
-- [ ] Include before/after examples for raw `WebClient` and Spring `@HttpExchange`.
+### [x] 2.1 Split README and reference docs by audience
+- [x] Keep README short and focused on product fit, install, and first use.
+- [x] Add `docs/16-production-checklist.md`.
+- [x] Add `docs/17-migration-from-webclient.md`.
+- [x] Include before/after examples for raw `WebClient` and Spring `@HttpExchange`.
 
-### [ ] 2.4 Make generated configuration metadata the source of truth
-- [ ] Add a metadata coverage test for important documented properties.
-- [ ] Make missing metadata for new properties fail CI.
-- [ ] Review defaults for every `reactive.http.*` key.
-- [ ] Align high-value docs and metadata descriptions.
+### [x] 2.4 Make generated configuration metadata the source of truth
+- [x] Add a metadata coverage test for important documented properties.
+- [x] Make missing metadata for new properties fail CI.
+- [x] Review defaults for every `reactive.http.*` key.
+- [x] Align high-value docs and metadata descriptions.
 
 ---
 
 ## Priority 6 — Safer exchange logging
 
-### [ ] 1.4 Optional request/response logging presets
-- [ ] Add `log-preset` property and metadata.
-- [ ] Implement `metadata-only`, `headers`, and `bodies` presets.
-- [ ] Keep the default conservative.
-- [ ] Preserve sensitive-header redaction for all presets.
-- [ ] Document how presets interact with body logging flags and custom loggers.
+### [x] 1.4 Optional request/response logging presets
+- [x] Add `log-preset` property and metadata.
+- [x] Implement `metadata-only`, `headers`, and `bodies` presets.
+- [x] Keep the default conservative.
+- [x] Preserve sensitive-header redaction for all presets.
+- [x] Document how presets interact with body logging flags and custom loggers.
 
 ---
 
 ## Priority 7 — Naming polish and hot-path internals
 
-### [ ] 2.2 Normalize client-name diagnostics
-- [ ] Define and document allowed client-name characters.
-- [ ] Validate client names during registration/property resolution.
-- [ ] Ensure duplicate-name errors include both interface names.
-- [ ] Normalize client-name usage across pool names, metrics tags, logs, spans,
+### [x] 2.2 Normalize client-name diagnostics
+- [x] Define and document allowed client-name characters.
+- [x] Validate client names during registration/property resolution.
+- [x] Ensure duplicate-name errors include both interface names.
+- [x] Normalize client-name usage across pool names, metrics tags, logs, spans,
   health output, and exception messages.
 
-### [ ] 2.3 Reduce hot-path allocations in invocation handling
-- [ ] Audit `ReactiveClientInvocationHandler` allocations on the steady path.
-- [ ] Move stable decisions into cached metadata/request plans where it improves clarity.
-- [ ] Capture before/after allocation notes in the implementation PR.
-- [ ] Keep new caches bounded.
-- [ ] Ensure behavior tests pass unchanged.
+### [x] 2.3 Reduce hot-path allocations in invocation handling
+- [x] Audit `ReactiveClientInvocationHandler` allocations on the steady path.
+- [x] Move stable decisions into cached metadata/request plans where it improves clarity.
+- [x] Capture before/after allocation notes in the implementation PR.
+- [x] Keep new caches bounded.
+- [x] Ensure behavior tests pass unchanged.
 
 ---
 
 ## Release Readiness
 
 - [x] `CHANGELOG.md` has V3 entries grouped under Added/Changed/Fixed/Docs.
-- [ ] README remains short and points to detailed docs.
-- [ ] Configuration metadata is complete for all new properties.
-- [ ] `mvn test` passes.
-- [ ] Breaking behavior, if any, is explicitly called out before release.
+- [x] README remains short and points to detailed docs.
+- [x] Configuration metadata is complete for all new properties.
+- [x] `mvn test` passes.
+- [x] Breaking behavior, if any, is explicitly called out before release.

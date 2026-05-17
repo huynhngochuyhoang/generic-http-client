@@ -327,6 +327,7 @@ public class ReactiveHttpClientProperties {
         private boolean compressionEnabled = false;
         private boolean http2Enabled = false;
         private boolean logExchange = false;
+        private LogPreset logPreset = LogPreset.METADATA_ONLY;
         /**
          * Bean name of {@code AuthProvider} to use for this client.
          * Empty means no automatic auth injection.
@@ -387,6 +388,11 @@ public class ReactiveHttpClientProperties {
         public boolean isLogExchange() { return logExchange; }
         public void setLogExchange(boolean logExchange) { this.logExchange = logExchange; }
 
+        public LogPreset getLogPreset() { return logPreset; }
+        public void setLogPreset(LogPreset logPreset) {
+            this.logPreset = logPreset != null ? logPreset : LogPreset.METADATA_ONLY;
+        }
+
         public boolean isExchangeLoggingEnabled() {
             return logExchange;
         }
@@ -428,6 +434,12 @@ public class ReactiveHttpClientProperties {
 
         public TlsConfig getTls() { return tls; }
         public void setTls(TlsConfig tls) { this.tls = tls; }
+    }
+
+    public enum LogPreset {
+        METADATA_ONLY,
+        HEADERS,
+        BODIES
     }
 
     public static class AuthConfig {

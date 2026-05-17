@@ -284,6 +284,13 @@
       "defaultValue": false
     },
     {
+      "name": "reactive.http.clients.[name].log-preset",
+      "type": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$LogPreset",
+      "description": "Controls how much data the default exchange logger writes when log-exchange is enabled or @LogHttpExchange uses DefaultHttpExchangeLogger. Values: metadata-only, headers, bodies. Default: metadata-only.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig",
+      "defaultValue": "metadata-only"
+    },
+    {
       "name": "reactive.http.clients.[name].default-headers",
       "type": "java.util.Map<java.lang.String,java.lang.String>",
       "description": "Static headers added to every request for this client. Method-level @HeaderParam values with the same header name override configured defaults.",
@@ -714,6 +721,14 @@
         { "value": "PUT" },
         { "value": "DELETE" },
         { "value": "PATCH" }
+      ]
+    },
+    {
+      "name": "reactive.http.clients.[name].log-preset",
+      "values": [
+        { "value": "metadata-only", "description": "Log method, path, status, and duration with headers and bodies omitted." },
+        { "value": "headers", "description": "Log metadata plus redacted request, response, and inbound headers." },
+        { "value": "bodies", "description": "Log metadata, redacted headers, and request/response bodies." }
       ]
     }
   ]

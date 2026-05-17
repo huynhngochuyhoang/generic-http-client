@@ -53,6 +53,16 @@ public enum ErrorCategory {
     AUTH_PROVIDER_ERROR,
 
     /**
+     * TLS negotiation or certificate validation failed.
+     */
+    TLS_ERROR,
+
+    /**
+     * A Resilience4j guard rejected or short-circuited the call.
+     */
+    RESILIENCE_ERROR,
+
+    /**
      * The response payload could not be decoded/deserialized to the declared response type
      * (e.g. malformed JSON, incompatible JSON shape/type, encoded/garbled payload).
      */

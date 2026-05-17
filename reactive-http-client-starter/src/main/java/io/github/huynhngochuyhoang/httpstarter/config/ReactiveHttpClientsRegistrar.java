@@ -1,10 +1,11 @@
 package io.github.huynhngochuyhoang.httpstarter.config;
 
 import io.github.huynhngochuyhoang.httpstarter.annotation.ReactiveHttpClient;
+import io.github.huynhngochuyhoang.httpstarter.core.ClientNameValidator;
 import io.github.huynhngochuyhoang.httpstarter.core.ReactiveHttpClientFactoryBean;
 import io.github.huynhngochuyhoang.httpstarter.enable.EnableReactiveHttpClients;
-import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.FactoryBean;
+import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
@@ -15,12 +16,7 @@ import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.ClassUtils;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Scans the configured base packages for interfaces annotated with
@@ -86,6 +82,7 @@ public class ReactiveHttpClientsRegistrar implements ImportBeanDefinitionRegistr
             ReactiveHttpClient annotation = interfaceClass.getAnnotation(ReactiveHttpClient.class);
             if (annotation == null) continue;
             String clientName = annotation.name();
+            ClientNameValidator.validate(clientName, "@ReactiveHttpClient(name) on " + interfaceClass.getName());
             String previous = seenNames.put(clientName, interfaceClass.getName());
             if (previous != null) {
                 throw new IllegalStateException(
