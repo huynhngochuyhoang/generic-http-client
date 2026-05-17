@@ -19,6 +19,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -131,6 +132,20 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
         assertThatThrownBy(() -> buildFactoryBean(properties).getObject())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid header name");
+    }
+
+    @Test
+    void failsFastWhenDefaultHeaderValueIsNull() {
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        ReactiveHttpClientProperties.ClientConfig config = clientConfig("http://localhost:8080");
+        Map<String, String> defaultHeaders = new HashMap<>();
+        defaultHeaders.put("X-Tenant", null);
+        config.setDefaultHeaders(defaultHeaders);
+        properties.getClients().put("diagnostic-client", config);
+
+        assertThatThrownBy(() -> buildFactoryBean(properties).getObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Default header 'X-Tenant' for client 'diagnostic-client' must not be null");
     }
 
     @Test

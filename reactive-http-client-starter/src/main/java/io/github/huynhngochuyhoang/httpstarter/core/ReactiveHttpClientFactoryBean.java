@@ -352,6 +352,10 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
         }
         defaultHeaders.forEach((name, value) -> {
             RequestArgumentResolver.validateHeaderName(name);
+            if (value == null) {
+                throw new IllegalArgumentException("Default header '" + name
+                        + "' for client '" + clientName + "' must not be null.");
+            }
             RequestArgumentResolver.validateHeaderValue(name, value);
             if (isSensitiveConfiguredKey(name)) {
                 log.warn("Reactive HTTP client [{}] default header [{}] looks sensitive. "
