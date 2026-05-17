@@ -7,54 +7,54 @@
 
 ## Priority 1 — Transport confidence and startup diagnostics
 
-### [ ] 3.1 HTTP/2 compatibility and TLS behavior tests
-- [ ] Add an in-process Reactor Netty HTTP/2 server test.
-- [ ] Verify an `http2-enabled: true` client succeeds against an HTTP/2 TLS endpoint.
-- [ ] Verify default clients keep the existing HTTP/1.1 behavior.
-- [ ] Keep tests network-free and independent of external services.
+### [x] 3.1 HTTP/2 compatibility and TLS behavior tests
+- [x] Add an in-process Reactor Netty HTTP/2 server test.
+- [x] Verify an `http2-enabled: true` client succeeds against an HTTP/2 TLS endpoint.
+- [x] Verify default clients keep the existing HTTP/1.1 behavior.
+- [x] Keep tests network-free and independent of external services.
 
-### [ ] 1.1 Configuration validation report at startup
-- [ ] Emit one DEBUG startup summary per resolved client.
-- [ ] Include base URL source, HTTP protocol, pool source, proxy/TLS, auth mode,
+### [x] 1.1 Configuration validation report at startup
+- [x] Emit one DEBUG startup summary per resolved client.
+- [x] Include base URL source, HTTP protocol, pool source, proxy/TLS, auth mode,
   resilience operators, observability, and logging flags.
-- [ ] Redact all secrets and sensitive values.
-- [ ] Fail fast for incomplete or contradictory proxy/TLS/auth settings.
-- [ ] Add tests for redaction and at least three invalid config paths.
+- [x] Redact all secrets and sensitive values.
+- [x] Fail fast for incomplete or contradictory proxy/TLS/auth settings.
+- [x] Add tests for redaction and at least three invalid config paths.
 
 ---
 
 ## Priority 2 — Default headers with validation
 
-### [ ] 1.2 Declarative default headers per client
-- [ ] Add `defaultHeaders` to `ReactiveHttpClientProperties.ClientConfig`.
-- [ ] Add Spring configuration metadata for `reactive.http.clients.[name].default-headers`.
-- [ ] Apply default headers to every request for the client.
-- [ ] Ensure dynamic `@HeaderParam` values override configured defaults.
-- [ ] Document YAML usage.
+### [x] 1.2 Declarative default headers per client
+- [x] Add `defaultHeaders` to `ReactiveHttpClientProperties.ClientConfig`.
+- [x] Add Spring configuration metadata for `reactive.http.clients.[name].default-headers`.
+- [x] Apply default headers to every request for the client.
+- [x] Ensure dynamic `@HeaderParam` values override configured defaults.
+- [x] Document YAML usage.
 
-### [ ] 3.2 Guard against unsafe default header/query configuration
-- [ ] Reuse existing header-name/header-value validation for configured default headers.
-- [ ] Reject control characters in configured values.
-- [ ] Cover invalid default headers in tests.
-- [ ] Decide whether sensitive-looking configured keys should warn or fail.
+### [x] 3.2 Guard against unsafe default header/query configuration
+- [x] Reuse existing header-name/header-value validation for configured default headers.
+- [x] Reject control characters in configured values.
+- [x] Cover invalid default headers in tests.
+- [x] Decide whether sensitive-looking configured keys should warn or fail.
 
 ---
 
 ## Priority 3 — Default query parameters and config precedence
 
-### [ ] 1.3 Per-client default query parameters
-- [ ] Add `defaultQueryParams` to `ReactiveHttpClientProperties.ClientConfig`.
-- [ ] Add Spring configuration metadata for `reactive.http.clients.[name].default-query-params`.
-- [ ] Apply defaults to every request for the client.
-- [ ] Define and test merge behavior with method-level `@QueryParam`.
-- [ ] Document no-query, existing-query, and override/append examples.
+### [x] 1.3 Per-client default query parameters
+- [x] Add `defaultQueryParams` to `ReactiveHttpClientProperties.ClientConfig`.
+- [x] Add Spring configuration metadata for `reactive.http.clients.[name].default-query-params`.
+- [x] Apply defaults to every request for the client.
+- [x] Define and test merge behavior with method-level `@QueryParam`.
+- [x] Document no-query, existing-query, and override/append examples.
 
-### [ ] 3.3 Configuration collision checks
-- [ ] Document auth bean-name vs object-auth precedence.
-- [ ] Add tests for auth precedence.
-- [ ] Document risks of replacing the starter-managed connector in customizers.
-- [ ] Fail fast or warn for ambiguous configuration combinations.
-- [ ] Include precedence decisions in startup diagnostics where useful.
+### [x] 3.3 Configuration collision checks
+- [x] Document auth bean-name vs object-auth precedence.
+- [x] Add tests for auth precedence.
+- [x] Document risks of replacing the starter-managed connector in customizers.
+- [x] Fail fast or warn for ambiguous configuration combinations.
+- [x] Include precedence decisions in startup diagnostics where useful.
 
 ---
 
@@ -117,7 +117,7 @@
 
 ## Release Readiness
 
-- [ ] `CHANGELOG.md` has V3 entries grouped under Added/Changed/Fixed/Docs.
+- [x] `CHANGELOG.md` has V3 entries grouped under Added/Changed/Fixed/Docs.
 - [ ] README remains short and points to detailed docs.
 - [ ] Configuration metadata is complete for all new properties.
 - [ ] `mvn test` passes.

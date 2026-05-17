@@ -166,7 +166,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     "Method " + method.getName() + " has no HTTP verb annotation (@GET, @POST, @PUT, @DELETE, @PATCH) or @ApiRef");
         }
 
-        RequestArgumentResolver.ResolvedArgs resolved = argumentResolver.resolve(meta, args);
+        RequestArgumentResolver.ResolvedArgs resolved = applyDefaultHeaders(
+                applyDefaultQueryParams(argumentResolver.resolve(meta, args)));
         long requestBytes = measureRequestBodyBytes(resolved.body());
 
         AtomicLong start = new AtomicLong();
@@ -454,15 +455,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 : null;
         String configPrefix = ApiRefValidationSupport.configPrefix(clientName, meta.getApiRefName());
         String apiRefContext = ApiRefValidationSupport.apiRefContext(method, meta.getApiRefName());
-        if (apiConfig == null) {
-            throw new IllegalStateException(apiRefContext + " but " + configPrefix + " is not configured.");
-        }
-        if (!StringUtils.hasText(apiConfig.getMethod())) {
-            throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".method is blank.");
-        }
-        if (!StringUtils.hasText(apiConfig.getPath())) {
-            throw new IllegalStateException(apiRefContext + " but " + configPrefix + ".path is blank.");
-        }
+        ReactiveHttpClientFactoryBean.validateApiRef(apiConfig, configPrefix, apiRefContext);
         long configuredTimeoutMs = apiConfig.getTimeoutMs();
 
         return new EffectiveApi(
@@ -1006,6 +999,52 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
     private ErrorCategory resolveErrorCategory(HttpStatusCode statusCode, Throwable error) {
         return ErrorCategories.from(error, statusCode != null ? statusCode.value() : null);
+    }
+
+    private RequestArgumentResolver.ResolvedArgs applyDefaultHeaders(RequestArgumentResolver.ResolvedArgs resolved) {
+        if (clientConfig.getDefaultHeaders() == null || clientConfig.getDefaultHeaders().isEmpty()) {
+            return resolved;
+        }
+        Map<String, String> merged = new LinkedHashMap<>(clientConfig.getDefaultHeaders());
+        resolved.headers().forEach((name, value) -> {
+            String existingName = findHeaderNameIgnoreCase(merged, name);
+            if (existingName != null) {
+                merged.remove(existingName);
+            }
+            merged.put(name, value);
+        });
+        return new RequestArgumentResolver.ResolvedArgs(
+                resolved.pathVars(),
+                resolved.queryParams(),
+                merged,
+                resolved.body());
+    }
+
+    private RequestArgumentResolver.ResolvedArgs applyDefaultQueryParams(RequestArgumentResolver.ResolvedArgs resolved) {
+        if (clientConfig.getDefaultQueryParams() == null || clientConfig.getDefaultQueryParams().isEmpty()) {
+            return resolved;
+        }
+        Map<String, List<Object>> merged = new LinkedHashMap<>();
+        clientConfig.getDefaultQueryParams().forEach((name, values) ->
+                merged.put(name, values.stream().map(value -> (Object) value).toList()));
+        resolved.queryParams().forEach((name, values) -> {
+            merged.remove(name);
+            merged.put(name, values);
+        });
+        return new RequestArgumentResolver.ResolvedArgs(
+                resolved.pathVars(),
+                merged,
+                resolved.headers(),
+                resolved.body());
+    }
+
+    private String findHeaderNameIgnoreCase(Map<String, String> headers, String headerName) {
+        for (String existingName : headers.keySet()) {
+            if (existingName.equalsIgnoreCase(headerName)) {
+                return existingName;
+            }
+        }
+        return null;
     }
 
     private record EffectiveApi(String httpMethod, String pathTemplate, long timeoutMs) {}

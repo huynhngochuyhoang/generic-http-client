@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-05-17
+
+### Added
+
+- **Startup diagnostics for resolved clients.** At DEBUG level, each client now
+  logs its resolved base URL source, HTTP protocol, pool source, proxy/TLS
+  state, auth mode, resilience operators, observability, and exchange logging
+  flags with sensitive values redacted.
+- **Per-client default headers.** Added
+  `reactive.http.clients.*.default-headers` for static headers applied to every
+  request. Method-level `@HeaderParam` values override configured defaults.
+- **Per-client default query parameters.** Added
+  `reactive.http.clients.*.default-query-params` for static query parameters
+  applied to every request. Method-level `@QueryParam` values replace defaults
+  with the same name, and list values are sent as repeated query parameters.
+- **Configuration metadata for V3 properties.** Added Spring metadata for the
+  new default-header and default-query-parameter properties.
+
+### Changed
+
+- **HTTP/2 and TLS confidence coverage.** Added in-process Reactor Netty tests
+  proving HTTP/2 over TLS works when opted in and default TLS clients retain the
+  HTTP/1.1 path.
+- **Auth precedence is explicit.** When both `auth-provider` and object-style
+  `auth.type` are configured, the bean-name `auth-provider` wins and startup
+  logs a warning that object-style auth is ignored.
+- **Default header and query safety checks.** Configured default headers and
+  default query parameters now fail fast for invalid names or control-character
+  values. Sensitive-looking configured keys warn at startup without logging
+  their values.
+
+### Docs
+
+- Documented default header and default query YAML usage, including no-query,
+  appended-query, and same-name override examples.
+- Documented auth bean-name versus object-style auth precedence.
+- Documented the risk of replacing the starter-managed `WebClient` connector in
+  a `ReactiveHttpClientCustomizer`.
+
+---
+
 ## [2.0.0] - 2026-05-16
 
 ### Added
@@ -743,7 +784,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...v2.0.0
 [1.16.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.14.0...v1.15.0

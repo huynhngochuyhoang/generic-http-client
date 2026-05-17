@@ -12,7 +12,7 @@
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>2.0.0</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
@@ -122,7 +122,22 @@ reactive:
     clients:
       user-service:
         base-url: https://api.example.com
+        default-headers:
+          X-Client: my-service
+          X-Tenant: public
+        default-query-params:
+          locale: [en-US]
+          include: [summary, links]
 ```
+
+`default-headers` are sent on every request for that client. A method parameter annotated with
+`@HeaderParam` for the same header name overrides the configured default.
+
+`default-query-params` are also sent on every request:
+
+- no method query: `GET /users` becomes `/users?locale=en-US&include=summary&include=links`
+- existing method query: `@QueryParam("page")` appends beside defaults
+- same-name method query: `@QueryParam("locale")` replaces the configured `locale`
 
 ## Inject and use
 
@@ -175,6 +190,10 @@ reactive:
         codec-max-in-memory-size-mb: 2
         compression-enabled: false
         http2-enabled: false
+        default-headers:
+          X-Client: my-service
+        default-query-params:
+          locale: [en-US]
         log-exchange: false
         resilience:
           enabled: true

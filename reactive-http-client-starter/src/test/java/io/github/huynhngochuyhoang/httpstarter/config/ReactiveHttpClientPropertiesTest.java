@@ -28,6 +28,10 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         assertNull(config.getAuthProvider());
         assertNull(config.getAuth());
+        assertNotNull(config.getDefaultHeaders());
+        assertTrue(config.getDefaultHeaders().isEmpty());
+        assertNotNull(config.getDefaultQueryParams());
+        assertTrue(config.getDefaultQueryParams().isEmpty());
         assertNotNull(config.getApis());
         assertTrue(config.getApis().isEmpty());
     }
@@ -83,6 +87,34 @@ class ReactiveHttpClientPropertiesTest {
 
         assertTrue(bound.getClients().get("inventory").isHttp2Enabled());
         assertFalse(bound.getClients().get("users").isHttp2Enabled());
+    }
+
+    @Test
+    void shouldBindPerClientDefaultHeaders() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.inventory.default-headers.X-Tenant", "public");
+        yaml.put("reactive.http.clients.inventory.default-headers.X-Client-Version", "v1");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        Map<String, String> defaultHeaders = bound.getClients().get("inventory").getDefaultHeaders();
+        assertEquals("public", defaultHeaders.get("X-Tenant"));
+        assertEquals("v1", defaultHeaders.get("X-Client-Version"));
+    }
+
+    @Test
+    void shouldBindPerClientDefaultQueryParams() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.inventory.default-query-params.locale[0]", "en-US");
+        yaml.put("reactive.http.clients.inventory.default-query-params.tag[0]", "public");
+        yaml.put("reactive.http.clients.inventory.default-query-params.tag[1]", "stable");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        Map<String, java.util.List<String>> defaultQueryParams =
+                bound.getClients().get("inventory").getDefaultQueryParams();
+        assertEquals(java.util.List.of("en-US"), defaultQueryParams.get("locale"));
+        assertEquals(java.util.List.of("public", "stable"), defaultQueryParams.get("tag"));
     }
 
     @Test

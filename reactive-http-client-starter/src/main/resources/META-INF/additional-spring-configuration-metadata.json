@@ -284,6 +284,18 @@
       "defaultValue": false
     },
     {
+      "name": "reactive.http.clients.[name].default-headers",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "description": "Static headers added to every request for this client. Method-level @HeaderParam values with the same header name override configured defaults.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig"
+    },
+    {
+      "name": "reactive.http.clients.[name].default-query-params",
+      "type": "java.util.Map<java.lang.String,java.util.List<java.lang.String>>",
+      "description": "Static query parameters added to every request for this client. Method-level @QueryParam values with the same name override configured defaults. Multiple values are sent as repeated query parameters.",
+      "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ClientConfig"
+    },
+    {
       "name": "reactive.http.clients.[name].auth-provider",
       "type": "java.lang.String",
       "description": "Bean name of the AuthProvider to inject for this client. Leave empty to disable automatic auth. Default: empty.",
