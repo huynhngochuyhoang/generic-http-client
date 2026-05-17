@@ -82,7 +82,13 @@ public class ReactiveHttpClientsRegistrar implements ImportBeanDefinitionRegistr
             ReactiveHttpClient annotation = interfaceClass.getAnnotation(ReactiveHttpClient.class);
             if (annotation == null) continue;
             String clientName = annotation.name();
-            ClientNameValidator.validate(clientName, "@ReactiveHttpClient(name) on " + interfaceClass.getName());
+            ClientNameValidator.validateAnnotation(
+                    clientName,
+                    annotation.baseUrl(),
+                    "@ReactiveHttpClient on " + interfaceClass.getName());
+            if (clientName.isBlank()) {
+                continue;
+            }
             String previous = seenNames.put(clientName, interfaceClass.getName());
             if (previous != null) {
                 throw new IllegalStateException(

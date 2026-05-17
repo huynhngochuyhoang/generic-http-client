@@ -27,4 +27,17 @@ class ClientNameValidatorTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(ClientNameValidator.ALLOWED_PATTERN_DESCRIPTION);
     }
+
+    @Test
+    void allowsBlankAnnotationNameWhenBaseUrlIsPresent() {
+        assertThatNoException().isThrownBy(() ->
+                ClientNameValidator.validateAnnotation("", "http://localhost:8080", "@ReactiveHttpClient"));
+    }
+
+    @Test
+    void rejectsAnnotationWithoutNameOrBaseUrl() {
+        assertThatThrownBy(() -> ClientNameValidator.validateAnnotation("", "", "@ReactiveHttpClient"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must define either a non-blank client name or baseUrl");
+    }
 }

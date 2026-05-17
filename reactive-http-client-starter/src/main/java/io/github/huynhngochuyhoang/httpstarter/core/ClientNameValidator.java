@@ -21,4 +21,14 @@ public final class ClientNameValidator {
                     + "' is invalid. Allowed pattern: " + ALLOWED_PATTERN_DESCRIPTION);
         }
     }
+
+    public static void validateAnnotation(String clientName, String baseUrl, String context) {
+        if (StringUtils.hasText(clientName)) {
+            validate(clientName, context);
+            return;
+        }
+        if (!StringUtils.hasText(baseUrl)) {
+            throw new IllegalArgumentException(context + " must define either a non-blank client name or baseUrl");
+        }
+    }
 }

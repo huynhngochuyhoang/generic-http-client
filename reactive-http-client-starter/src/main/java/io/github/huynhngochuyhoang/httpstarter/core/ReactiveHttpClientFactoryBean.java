@@ -59,7 +59,7 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     public T getObject() {
         ReactiveHttpClient annotation = type.getAnnotation(ReactiveHttpClient.class);
         String clientName = annotation.name();
-        ClientNameValidator.validate(clientName, "@ReactiveHttpClient(name)");
+        ClientNameValidator.validateAnnotation(clientName, annotation.baseUrl(), "@ReactiveHttpClient");
 
         ReactiveHttpClientProperties properties = applicationContext
                 .getBeanProvider(ReactiveHttpClientProperties.class)

@@ -397,6 +397,10 @@ public class ReactiveHttpClientProperties {
             return logExchange;
         }
 
+        public void setExchangeLoggingEnabled(boolean exchangeLoggingEnabled) {
+            this.logExchange = exchangeLoggingEnabled;
+        }
+
         public String getAuthProvider() { return authProvider; }
         public void setAuthProvider(String authProvider) { this.authProvider = authProvider; }
 
