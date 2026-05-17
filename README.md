@@ -77,7 +77,7 @@ Add the starter:
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
 </dependency>
 ```
 
@@ -123,6 +123,7 @@ reactive:
         compression-enabled: false
         http2-enabled: false
         log-exchange: false
+        log-preset: metadata-only
         resilience:
           enabled: true
           retry: user-service
@@ -142,7 +143,7 @@ reactive:
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-test</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
   <scope>test</scope>
 </dependency>
 ```
@@ -171,7 +172,7 @@ class UserApiClientTest {
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-otel</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
 </dependency>
 ```
 
@@ -213,6 +214,8 @@ Use plain Spring `@HttpExchange` or direct `WebClient` when:
 | [Exchange Logging](docs/13-exchange-logging.md) | Request/response logging |
 | [Test Helpers](docs/14-test-helpers.md) | Mock clients and assertions |
 | [Per-Client Customizer](docs/15-customizer.md) | Custom WebClient filters |
+| [Production Checklist](docs/16-production-checklist.md) | Production readiness checks |
+| [Migration from WebClient](docs/17-migration-from-webclient.md) | Migration examples |
 | [Examples](docs/examples/README.md) | Copy-paste snippets |
 
 ---

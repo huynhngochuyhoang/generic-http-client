@@ -8,6 +8,8 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.distribution.CountAtBucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Arrays;
 
@@ -66,6 +68,35 @@ class MicrometerHttpClientObserverTest {
 
         Timer timer = meterRegistry.find("reactive.http.client.requests")
                 .tag("error.category", "none")
+                .timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count(), 0.0d);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ErrorCategory.class)
+    void shouldUsePublishedErrorCategoryNamesAsMetricTagValues(ErrorCategory category) {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service",
+                "user.get",
+                "GET",
+                "/users/{id}",
+                null,
+                15,
+                new RuntimeException(category.name()),
+                category,
+                null,
+                null
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
+                .tag("error.category", category.name())
                 .timer();
         assertNotNull(timer);
         assertEquals(1, timer.count(), 0.0d);

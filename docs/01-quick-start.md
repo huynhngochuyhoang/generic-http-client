@@ -12,7 +12,7 @@
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>2.1.0</version>
+  <version>2.2.0</version>
 </dependency>
 ```
 
@@ -195,6 +195,7 @@ reactive:
         default-query-params:
           locale: [en-US]
         log-exchange: false
+        log-preset: metadata-only
         resilience:
           enabled: true
           circuit-breaker: user-service

@@ -64,9 +64,18 @@ reactive:
     clients:
       user-service:
         log-exchange: true
+        log-preset: metadata-only
 ```
 
-`log-exchange` is the only configuration property for client-wide exchange logging in 2.0.0. Replace any older `log-body: true` setting with `log-exchange: true`.
+`log-exchange` turns on client-wide exchange logging. `log-preset` controls what the default logger writes:
+
+| Preset | Logged data |
+|---|---|
+| `metadata-only` | Method, path template, status, duration, and error. Headers and bodies are omitted. This is the default. |
+| `headers` | Metadata plus inbound, request, and response headers. Sensitive headers are redacted. Bodies are omitted. |
+| `bodies` | Metadata, redacted headers, and request/response bodies. Use only when payload logging is acceptable. |
+
+Replace any older `log-body: true` setting with `log-exchange: true` and, if body payloads are required, `log-preset: bodies`.
 
 ---
 
@@ -89,12 +98,13 @@ The context record carries all exchange fields available to the logger:
 | `responseBody` | `Object` | Decoded response body (`null` for `Flux<T>` responses) |
 | `durationMs` | `long` | Exchange duration in milliseconds |
 | `error` | `Throwable` | Thrown exception, or `null` on success |
+| `logPreset` | `LogPreset` | Configured preset for the default logger |
 
 ---
 
 ## Default logger — `DefaultHttpExchangeLogger`
 
-The built-in logger logs at `INFO` on success and `WARN` on error. Request and response bodies are included only when the logger's level is `DEBUG` or finer; otherwise `[OMITTED]` is substituted.
+The built-in logger logs at `INFO` on success and `WARN` on error. Request/response headers and bodies are controlled by `log-preset`; omitted values are written as `{}` or `[OMITTED]`.
 
 Sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Api-Key`) are automatically replaced with `[REDACTED]` in both request and response header maps.
 
@@ -163,6 +173,8 @@ AuditExchangeLogger auditExchangeLogger(AuditService auditService) {
 The runtime will resolve the bean by class and reuse it across all methods that reference `AuditExchangeLogger.class`. Different methods can reference different logger classes — there is no global limit of one logger bean.
 
 When `@LogHttpExchange` is used without a `logger` attribute (i.e. `logger = DefaultHttpExchangeLogger.class`), the runtime resolves `DefaultHttpExchangeLogger` through the same look-up/instantiation path.
+
+`log-preset` is applied by `DefaultHttpExchangeLogger`. Custom `HttpExchangeLogger` implementations receive the preset in `HttpExchangeLogContext` and may choose to honor or ignore it.
 
 ---
 

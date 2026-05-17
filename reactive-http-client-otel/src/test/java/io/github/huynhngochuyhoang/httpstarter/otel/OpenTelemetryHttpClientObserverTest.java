@@ -17,6 +17,8 @@ import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 
@@ -133,6 +135,23 @@ class OpenTelemetryHttpClientObserverTest {
                 .as("when ErrorCategory is null, fall back to the exception's simple name")
                 .isEqualTo("ConnectException");
         assertThat(span.getStatus().getStatusCode().name()).isEqualTo("ERROR");
+    }
+
+    @ParameterizedTest
+    @EnumSource(ErrorCategory.class)
+    void errorCategoryNamesBecomeOpenTelemetryErrorTypeValues(ErrorCategory category) {
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                null, 5L,
+                new RuntimeException(category.name()),
+                category,
+                null, null,
+                1, HttpClientObserverEvent.UNKNOWN_SIZE, HttpClientObserverEvent.UNKNOWN_SIZE
+        ));
+
+        SpanData span = onlySpan();
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_ERROR_TYPE))
+                .isEqualTo(category.name());
     }
 
     @Test

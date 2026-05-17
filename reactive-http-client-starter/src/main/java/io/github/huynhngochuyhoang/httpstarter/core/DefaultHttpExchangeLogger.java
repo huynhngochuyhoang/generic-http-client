@@ -1,5 +1,6 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,15 +31,17 @@ public class DefaultHttpExchangeLogger implements HttpExchangeLogger {
     }
 
     private void logSuccess(HttpExchangeLogContext context) {
-        Map<String, String> requestHeaders = redactRequestHeaders(context.requestHeaders());
-        Map<String, List<String>> responseHeaders = redactResponseHeaders(context.responseHeaders());
-        Object requestBody = shouldLogBodies() ? context.requestBody() : OMITTED;
-        Object responseBody = shouldLogBodies() ? context.responseBody() : OMITTED;
+        boolean logHeaders = shouldLogHeaders(context);
+        Map<String, List<String>> inboundHeaders = logHeaders ? context.inboundHeaders() : Map.of();
+        Map<String, String> requestHeaders = logHeaders ? redactRequestHeaders(context.requestHeaders()) : Map.of();
+        Map<String, List<String>> responseHeaders = logHeaders ? redactResponseHeaders(context.responseHeaders()) : Map.of();
+        Object requestBody = shouldLogBodies(context) ? context.requestBody() : OMITTED;
+        Object responseBody = shouldLogBodies(context) ? context.responseBody() : OMITTED;
         log.info("[{}] {} {} inboundHeaders={} reqHeaders={} reqBody={} respStatus={} respHeaders={} respBody={} duration={}ms",
                 context.clientName(),
                 context.httpMethod(),
                 context.pathTemplate(),
-                context.inboundHeaders(),
+                inboundHeaders,
                 requestHeaders,
                 requestBody,
                 context.responseStatus(),
@@ -48,15 +51,17 @@ public class DefaultHttpExchangeLogger implements HttpExchangeLogger {
     }
 
     private void logError(HttpExchangeLogContext context) {
-        Map<String, String> requestHeaders = redactRequestHeaders(context.requestHeaders());
-        Map<String, List<String>> responseHeaders = redactResponseHeaders(context.responseHeaders());
-        Object requestBody = shouldLogBodies() ? context.requestBody() : OMITTED;
-        Object responseBody = shouldLogBodies() ? context.responseBody() : OMITTED;
+        boolean logHeaders = shouldLogHeaders(context);
+        Map<String, List<String>> inboundHeaders = logHeaders ? context.inboundHeaders() : Map.of();
+        Map<String, String> requestHeaders = logHeaders ? redactRequestHeaders(context.requestHeaders()) : Map.of();
+        Map<String, List<String>> responseHeaders = logHeaders ? redactResponseHeaders(context.responseHeaders()) : Map.of();
+        Object requestBody = shouldLogBodies(context) ? context.requestBody() : OMITTED;
+        Object responseBody = shouldLogBodies(context) ? context.responseBody() : OMITTED;
         log.warn("[{}] {} {} inboundHeaders={} reqHeaders={} reqBody={} respStatus={} respHeaders={} respBody={} duration={}ms error={}",
                 context.clientName(),
                 context.httpMethod(),
                 context.pathTemplate(),
-                context.inboundHeaders(),
+                inboundHeaders,
                 requestHeaders,
                 requestBody,
                 context.responseStatus(),
@@ -66,8 +71,16 @@ public class DefaultHttpExchangeLogger implements HttpExchangeLogger {
                 context.error().toString());
     }
 
-    private boolean shouldLogBodies() {
-        return log.isDebugEnabled();
+    private boolean shouldLogHeaders(HttpExchangeLogContext context) {
+        ReactiveHttpClientProperties.LogPreset preset = context.logPreset() != null
+                ? context.logPreset()
+                : ReactiveHttpClientProperties.LogPreset.METADATA_ONLY;
+        return preset == ReactiveHttpClientProperties.LogPreset.HEADERS
+                || preset == ReactiveHttpClientProperties.LogPreset.BODIES;
+    }
+
+    private boolean shouldLogBodies(HttpExchangeLogContext context) {
+        return context.logPreset() == ReactiveHttpClientProperties.LogPreset.BODIES;
     }
 
     private Map<String, String> redactRequestHeaders(Map<String, String> headers) {

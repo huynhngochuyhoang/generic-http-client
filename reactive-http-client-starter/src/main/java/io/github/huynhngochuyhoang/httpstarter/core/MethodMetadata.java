@@ -48,6 +48,7 @@ public class MethodMetadata {
     private Method method;
     private String apiName;
     private String apiRefName;
+    private EffectiveApi staticEffectiveApi;
     /** Method-level timeout override in milliseconds: {@link #TIMEOUT_NOT_SET} means not configured. */
     private long timeoutMs = TIMEOUT_NOT_SET;
     private boolean httpExchangeLoggingEnabled;
@@ -108,6 +109,9 @@ public class MethodMetadata {
 
     public String getApiRefName() { return apiRefName; }
     public void setApiRefName(String apiRefName) { this.apiRefName = apiRefName; }
+
+    public EffectiveApi getStaticEffectiveApi() { return staticEffectiveApi; }
+    public void setStaticEffectiveApi(EffectiveApi staticEffectiveApi) { this.staticEffectiveApi = staticEffectiveApi; }
 
     public long getTimeoutMs() { return timeoutMs; }
     public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }

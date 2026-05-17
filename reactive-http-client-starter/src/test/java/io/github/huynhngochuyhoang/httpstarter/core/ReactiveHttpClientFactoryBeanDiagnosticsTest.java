@@ -73,6 +73,7 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
                     .contains("tls=custom")
                     .contains("resilience=enabled")
                     .contains("exchangeLogging=enabled")
+                    .contains("logPreset=metadata-only")
                     .doesNotContain("proxy-secret");
         } finally {
             logger.setLevel(previousLevel);
@@ -120,6 +121,17 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No AuthProvider bean named 'missingAuthProvider'")
                 .hasMessageContaining("diagnostic-client");
+    }
+
+    @Test
+    void rejectsInvalidConfiguredClientName() {
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        properties.getClients().put("bad name", clientConfig("http://localhost:8080"));
+
+        assertThatThrownBy(() -> buildFactoryBean(properties).getObject())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reactive.http.clients client name 'bad name' is invalid")
+                .hasMessageContaining(ClientNameValidator.ALLOWED_PATTERN_DESCRIPTION);
     }
 
     @Test

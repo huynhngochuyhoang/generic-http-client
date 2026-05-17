@@ -117,6 +117,8 @@ Available assertion methods:
 | `hasErrorCategory(ErrorCategory)` | Asserts the `ErrorCategory` of the thrown exception |
 | `hasStatusCode(int)` | Asserts the HTTP status code |
 
+The helper uses the same published category names documented in [Error Handling](03-error-handling.md), including transport and resilience categories such as `TLS_ERROR` and `RESILIENCE_ERROR`.
+
 ---
 
 ## Simulating error responses

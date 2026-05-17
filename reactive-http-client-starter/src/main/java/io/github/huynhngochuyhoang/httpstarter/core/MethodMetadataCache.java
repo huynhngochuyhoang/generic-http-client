@@ -186,6 +186,13 @@ public class MethodMetadataCache {
             meta.setTimeoutMs(timeoutMs.value());
         }
 
+        if (meta.getApiRefName() == null) {
+            meta.setStaticEffectiveApi(new EffectiveApi(
+                    meta.getHttpMethod(),
+                    meta.getPathTemplate(),
+                    MethodMetadata.TIMEOUT_NOT_SET));
+        }
+
         Retry retry = method.getAnnotation(Retry.class);
         if (retry != null) {
             requireNonBlankAnnotationValue(retry.value(), "@Retry", method);

@@ -26,6 +26,7 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isHttp2Enabled());
         assertFalse(config.isLogExchange());
         assertFalse(config.isExchangeLoggingEnabled());
+        assertEquals(ReactiveHttpClientProperties.LogPreset.METADATA_ONLY, config.getLogPreset());
         assertNull(config.getAuthProvider());
         assertNull(config.getAuth());
         assertNotNull(config.getDefaultHeaders());
@@ -75,6 +76,19 @@ class ReactiveHttpClientPropertiesTest {
         assertFalse(config.isExchangeLoggingEnabled());
         config.setLogExchange(true);
         assertTrue(config.isExchangeLoggingEnabled());
+    }
+
+    @Test
+    void shouldBindExchangeLoggingPreset() {
+        Map<String, Object> yaml = new LinkedHashMap<>();
+        yaml.put("reactive.http.clients.audit.log-exchange", true);
+        yaml.put("reactive.http.clients.audit.log-preset", "headers");
+
+        ReactiveHttpClientProperties bound = bind(yaml);
+
+        ReactiveHttpClientProperties.ClientConfig config = bound.getClients().get("audit");
+        assertTrue(config.isExchangeLoggingEnabled());
+        assertEquals(ReactiveHttpClientProperties.LogPreset.HEADERS, config.getLogPreset());
     }
 
     @Test
