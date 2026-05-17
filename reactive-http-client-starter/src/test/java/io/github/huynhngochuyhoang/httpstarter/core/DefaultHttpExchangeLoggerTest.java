@@ -61,6 +61,26 @@ class DefaultHttpExchangeLoggerTest {
         assertThat(output).doesNotContain("secret-token");
     }
 
+    @Test
+    void legacyContextConstructorDefaultsToMetadataOnlyPreset() {
+        HttpExchangeLogContext context = new HttpExchangeLogContext(
+                "orders",
+                "GET",
+                "/orders/{id}",
+                Map.of("id", "42"),
+                Map.of("expand", List.of("summary")),
+                Map.of("Inbound", List.of("inbound")),
+                Map.of("Authorization", "secret-token"),
+                "request-body",
+                200,
+                Map.of("X-Response", List.of("visible")),
+                "response-body",
+                10,
+                null);
+
+        assertThat(context.logPreset()).isEqualTo(ReactiveHttpClientProperties.LogPreset.METADATA_ONLY);
+    }
+
     private static HttpExchangeLogContext context(ReactiveHttpClientProperties.LogPreset preset) {
         return context(preset, null);
     }

@@ -32,4 +32,35 @@ public record HttpExchangeLogContext(
         long durationMs,
         Throwable error,
         ReactiveHttpClientProperties.LogPreset logPreset
-) {}
+) {
+    public HttpExchangeLogContext(
+            String clientName,
+            String httpMethod,
+            String pathTemplate,
+            Map<String, Object> pathVariables,
+            Map<String, List<Object>> queryParameters,
+            Map<String, List<String>> inboundHeaders,
+            Map<String, String> requestHeaders,
+            Object requestBody,
+            Integer responseStatus,
+            Map<String, List<String>> responseHeaders,
+            Object responseBody,
+            long durationMs,
+            Throwable error) {
+        this(
+                clientName,
+                httpMethod,
+                pathTemplate,
+                pathVariables,
+                queryParameters,
+                inboundHeaders,
+                requestHeaders,
+                requestBody,
+                responseStatus,
+                responseHeaders,
+                responseBody,
+                durationMs,
+                error,
+                ReactiveHttpClientProperties.LogPreset.METADATA_ONLY);
+    }
+}
