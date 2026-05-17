@@ -1,12 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Resolves method invocation arguments into structured maps according to the annotations
@@ -44,6 +39,7 @@ public class RequestArgumentResolver {
             if (args != null && idx < args.length && args[idx] != null) {
                 String headerName = entry.getValue();
                 String headerValue = String.valueOf(args[idx]);
+                validateHeaderName(headerName);
                 validateHeaderValue(headerName, headerValue);
                 headers.put(headerName, headerValue);
             }
@@ -55,6 +51,7 @@ public class RequestArgumentResolver {
                         String key = String.valueOf(headerEntry.getKey());
                         if (!key.isBlank()) {
                             String value = String.valueOf(headerEntry.getValue());
+                            validateHeaderName(key);
                             validateHeaderValue(key, value);
                             headers.put(key, value);
                         }
@@ -93,7 +90,19 @@ public class RequestArgumentResolver {
         return List.of(value);
     }
 
-    private void validateHeaderValue(String headerName, String value) {
+    static void validateHeaderName(String headerName) {
+        if (headerName == null || headerName.isBlank()) {
+            throw new IllegalArgumentException("Header name must not be blank");
+        }
+        for (int i = 0; i < headerName.length(); i++) {
+            char ch = headerName.charAt(i);
+            if (ch <= 32 || ch >= 127 || "()<>@,;:\\\"/[]?={} \t".indexOf(ch) >= 0) {
+                throw new IllegalArgumentException("Invalid header name '" + headerName + "'");
+            }
+        }
+    }
+
+    static void validateHeaderValue(String headerName, String value) {
         if (value == null) {
             return;
         }

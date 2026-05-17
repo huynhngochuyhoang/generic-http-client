@@ -9,6 +9,11 @@ Do not use this hook just to enable HTTP/2. Use
 `reactive.http.clients.<name>.http2-enabled: true` instead, so the starter keeps
 owning the Reactor Netty connector and all network settings still apply.
 
+Avoid calling `builder.clientConnector(...)` from a customizer unless you intend to
+replace the starter-managed Reactor Netty connector. Replacing it bypasses the
+starter's configured connection pool, timeouts, compression, proxy, TLS/mTLS, and
+HTTP/2 settings for that client.
+
 ---
 
 ## Overview

@@ -339,6 +339,16 @@ public class ReactiveHttpClientProperties {
         private AuthConfig auth;
         private ResilienceConfig resilience = new ResilienceConfig();
         /**
+         * Static headers added to every request for this client. Method-level
+         * {@code @HeaderParam} values with the same name override these defaults.
+         */
+        private Map<String, String> defaultHeaders = new HashMap<>();
+        /**
+         * Static query parameters added to every request for this client. Method-level
+         * {@code @QueryParam} values with the same name override these defaults.
+         */
+        private Map<String, List<String>> defaultQueryParams = new HashMap<>();
+        /**
          * Optional named API definitions used by {@code @ApiRef}.
          * Keys are logical API names; values define method/path/timeout.
          */
@@ -394,6 +404,16 @@ public class ReactiveHttpClientProperties {
 
         public ResilienceConfig getResilience() { return resilience; }
         public void setResilience(ResilienceConfig resilience) { this.resilience = resilience; }
+
+        public Map<String, String> getDefaultHeaders() { return defaultHeaders; }
+        public void setDefaultHeaders(Map<String, String> defaultHeaders) {
+            this.defaultHeaders = defaultHeaders != null ? defaultHeaders : new HashMap<>();
+        }
+
+        public Map<String, List<String>> getDefaultQueryParams() { return defaultQueryParams; }
+        public void setDefaultQueryParams(Map<String, List<String>> defaultQueryParams) {
+            this.defaultQueryParams = defaultQueryParams != null ? defaultQueryParams : new HashMap<>();
+        }
 
         public Map<String, ApiConfig> getApis() { return apis; }
         public void setApis(Map<String, ApiConfig> apis) {

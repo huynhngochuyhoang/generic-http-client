@@ -1,40 +1,31 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
-import io.github.huynhngochuyhoang.httpstarter.annotation.Body;
-import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
-import io.github.huynhngochuyhoang.httpstarter.annotation.HeaderParam;
-import io.github.huynhngochuyhoang.httpstarter.annotation.POST;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.huynhngochuyhoang.httpstarter.annotation.*;
 import io.github.huynhngochuyhoang.httpstarter.auth.AuthRequest;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class ReactiveClientInvocationHandlerBehaviorTest {
 
@@ -59,6 +50,95 @@ class ReactiveClientInvocationHandlerBehaviorTest {
 
         assertEquals("application/xml", captured.get().headers().getFirst(HttpHeaders.ACCEPT));
         assertFalse(captured.get().headers().get(HttpHeaders.ACCEPT).contains("application/json"));
+    }
+
+    @Test
+    void shouldApplyDefaultHeadersToEveryRequest() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> {
+                    captured.set(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                            .body("ok")
+                            .build());
+                })
+                .build();
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setDefaultHeaders(Map.of("X-Tenant", "public", "X-Client-Version", "v1"));
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+        StepVerifier.create(invokeGet(handler, null))
+                .expectNext("ok")
+                .verifyComplete();
+
+        assertEquals("public", captured.get().headers().getFirst("X-Tenant"));
+        assertEquals("v1", captured.get().headers().getFirst("X-Client-Version"));
+    }
+
+    @Test
+    void shouldLetHeaderParamOverrideDefaultHeaderIgnoringCase() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> {
+                    captured.set(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                            .body("ok")
+                            .build());
+                })
+                .build();
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setDefaultHeaders(Map.of("accept", "application/json"));
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+        StepVerifier.create(invokeGet(handler, "application/xml"))
+                .expectNext("ok")
+                .verifyComplete();
+
+        assertEquals("application/xml", captured.get().headers().getFirst(HttpHeaders.ACCEPT));
+        assertFalse(captured.get().headers().get(HttpHeaders.ACCEPT).contains("application/json"));
+    }
+
+    @Test
+    void shouldApplyDefaultQueryParamsToRequestsWithoutMethodQuery() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setDefaultQueryParams(Map.of(
+                "locale", List.of("en-US"),
+                "tag", List.of("public", "stable")));
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+        StepVerifier.create(invokeGet(handler, null))
+                .expectNext("ok")
+                .verifyComplete();
+
+        var queryParams = UriComponentsBuilder.fromUri(captured.get().url()).build().getQueryParams();
+        assertEquals("en-US", queryParams.getFirst("locale"));
+        assertEquals(List.of("public", "stable"), queryParams.get("tag"));
+    }
+
+    @Test
+    void shouldLetQueryParamOverrideDefaultQueryParam() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setDefaultQueryParams(Map.of(
+                "locale", List.of("en-US"),
+                "tag", List.of("public")));
+
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+        StepVerifier.create(invokeSearch(handler, "vi-VN", List.of("runtime", "sale")))
+                .expectNext("ok")
+                .verifyComplete();
+
+        var queryParams = UriComponentsBuilder.fromUri(captured.get().url()).build().getQueryParams();
+        assertEquals("vi-VN", queryParams.getFirst("locale"));
+        assertEquals(List.of("runtime", "sale"), queryParams.get("tag"));
+        assertFalse(queryParams.get("tag").contains("public"));
     }
 
     @Test
@@ -219,7 +299,7 @@ class ReactiveClientInvocationHandlerBehaviorTest {
         ObjectMapper objectMapper = mock(ObjectMapper.class);
         when(objectMapper.writeValueAsBytes(any())).thenThrow(new IllegalStateException("must not serialize"));
 
-        ReactiveClientInvocationHandler handler = createHandler(webClient, null, objectMapper);
+        ReactiveClientInvocationHandler handler = createHandler(webClient, (String) null, objectMapper);
 
         StepVerifier.create(invokePostJson(handler, "application/json", Map.of("id", 1)))
                 .expectNext("ok")
@@ -269,8 +349,37 @@ class ReactiveClientInvocationHandlerBehaviorTest {
     }
 
     @SuppressWarnings("unchecked")
+    private static Mono<String> invokeSearch(ReactiveClientInvocationHandler handler, String locale, List<String> tags) {
+        try {
+            var method = ClientWithQueryParams.class.getMethod("search", String.class, List.class);
+            return (Mono<String>) handler.invoke(null, method, new Object[]{locale, tags});
+        } catch (Throwable t) {
+            return Mono.error(t);
+        }
+    }
+
+    private static WebClient captureRequestWebClient(AtomicReference<ClientRequest> captured) {
+        return WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> {
+                    captured.set(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                            .body("ok")
+                            .build());
+                })
+                .build();
+    }
+
+    @SuppressWarnings("unchecked")
     private static ReactiveClientInvocationHandler createHandler(WebClient webClient) {
-        return createHandler(webClient, null, new ObjectMapper());
+        return createHandler(webClient, (String) null, new ObjectMapper());
+    }
+
+    private static ReactiveClientInvocationHandler createHandler(
+            WebClient webClient,
+            ReactiveHttpClientProperties.ClientConfig config) {
+        return createHandler(webClient, config, new ObjectMapper());
     }
 
     @SuppressWarnings("unchecked")
@@ -278,12 +387,20 @@ class ReactiveClientInvocationHandlerBehaviorTest {
             WebClient webClient,
             String authProviderName,
             ObjectMapper objectMapper) {
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setAuthProvider(authProviderName);
+        return createHandler(webClient, config, objectMapper);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ReactiveClientInvocationHandler createHandler(
+            WebClient webClient,
+            ReactiveHttpClientProperties.ClientConfig config,
+            ObjectMapper objectMapper) {
         ApplicationContext appCtx = mock(ApplicationContext.class);
         ObjectProvider<HttpClientObserver> observerProvider = mock(ObjectProvider.class);
         when(appCtx.getBeanProvider(HttpClientObserver.class)).thenReturn(observerProvider);
         when(observerProvider.getIfAvailable()).thenReturn(null);
-        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
-        config.setAuthProvider(authProviderName);
 
         return new ReactiveClientInvocationHandler(
                 webClient,
@@ -317,6 +434,11 @@ class ReactiveClientInvocationHandlerBehaviorTest {
     interface ClientWithByteArrayBodyHeaders {
         @POST("/body")
         Mono<String> post(@HeaderParam("Content-Type") String contentType, @Body byte[] body);
+    }
+
+    interface ClientWithQueryParams {
+        @GET("/search")
+        Mono<String> search(@QueryParam("locale") String locale, @QueryParam("tag") List<String> tags);
     }
 
     interface ClientWithDefaultMethod {

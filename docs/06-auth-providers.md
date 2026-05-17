@@ -2,6 +2,8 @@
 
 Every registered client can have its own auth provider that injects credentials into outbound requests automatically via a WebClient filter. Use `reactive.http.clients.<name>.auth-provider` to reference a custom `AuthProvider` bean by name, or use the object-style `reactive.http.clients.<name>.auth` block for built-in providers.
 
+If both are configured, `auth-provider` wins and the object-style `auth` block is ignored. The starter logs a startup warning so the precedence is visible.
+
 ---
 
 ## `AuthProvider` interface

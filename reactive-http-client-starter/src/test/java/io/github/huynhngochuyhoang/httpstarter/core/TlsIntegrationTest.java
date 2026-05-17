@@ -21,6 +21,8 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class TlsIntegrationTest {
 
     @Test
@@ -42,6 +44,33 @@ class TlsIntegrationTest {
 
             StepVerifier.create(client.get().uri("/ping").retrieve().bodyToMono(String.class))
                     .expectNext("pong")
+                    .verifyComplete();
+        } finally {
+            Files.deleteIfExists(trustStore);
+            server.disposeNow();
+            certificate.delete();
+        }
+    }
+
+    @Test
+    void defaultTlsClientKeepsHttp11Path() throws Exception {
+        SelfSignedCertificate certificate = new SelfSignedCertificate("localhost");
+        DisposableServer server = startHttpsProtocolServer(certificate);
+        Path trustStore = writeTrustStore(certificate.cert(), "changeit");
+        try {
+            ReactiveHttpClientProperties.TlsConfig tls = new ReactiveHttpClientProperties.TlsConfig();
+            tls.setTrustStore("file:" + trustStore.toAbsolutePath());
+            tls.setTrustStorePassword("changeit");
+            tls.setTrustStoreType("PKCS12");
+
+            HttpClient httpClient = TlsContextApplier.apply(HttpClient.create(), tls, "tls-http11-test-client");
+            WebClient client = WebClient.builder()
+                    .baseUrl("https://localhost:" + server.port())
+                    .clientConnector(new ReactorClientHttpConnector(httpClient))
+                    .build();
+
+            StepVerifier.create(client.get().uri("/protocol").retrieve().bodyToMono(String.class))
+                    .assertNext(protocol -> assertThat(protocol).contains("HTTP/1.1"))
                     .verifyComplete();
         } finally {
             Files.deleteIfExists(trustStore);
@@ -120,6 +149,22 @@ class TlsIntegrationTest {
                     }
                 })
                 .route(routes -> routes.get("/ping", (request, response) -> response.sendString(Mono.just("pong"))))
+                .bindNow();
+    }
+
+    private DisposableServer startHttpsProtocolServer(SelfSignedCertificate certificate) {
+        return HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .secure(spec -> {
+                    try {
+                        spec.sslContext(SslContextBuilder.forServer(certificate.certificate(), certificate.privateKey()).build());
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Failed to build test server SSL context", e);
+                    }
+                })
+                .route(routes -> routes.get("/protocol",
+                        (request, response) -> response.sendString(Mono.just(request.protocol()))))
                 .bindNow();
     }
 
