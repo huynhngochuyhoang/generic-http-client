@@ -269,10 +269,6 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
             configured = configured.filter(new OutboundAuthFilter(clientName, authProvider));
         }
 
-        if (config.isExchangeLoggingEnabled()) {
-            configured = configured.filter(loggingFilter());
-        }
-
         // Apply per-client customizations registered as Spring beans.
         // Customizers are applied in @Order / Ordered sequence after all built-in filters.
         final WebClient.Builder finalConfigured = configured;
@@ -573,30 +569,6 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
     /** Propagates X-Correlation-Id from Reactor context (set by CorrelationIdWebFilter) or MDC. */
     private ExchangeFilterFunction correlationIdFilter(ReactiveHttpClientProperties.CorrelationIdConfig correlationIdConfig) {
         return CorrelationIdWebFilter.exchangeFilter(correlationIdConfig);
-    }
-
-    /** Logs method, URL, status and latency when exchange logging is enabled for the client. */
-    private ExchangeFilterFunction loggingFilter() {
-        return (request, next) -> {
-            long startMs = System.currentTimeMillis();
-            return next.exchange(request)
-                    .doOnNext(response -> {
-                        String outcome = response.statusCode().isError() ? "HTTP_ERROR" : "OK";
-                        log.debug("[{}] {} {} -> {} {} ({}ms)",
-                                type != null ? type.getSimpleName() : "ReactiveHttpClient",
-                                request.method(),
-                                request.url(),
-                                outcome,
-                                response.statusCode().value(),
-                                System.currentTimeMillis() - startMs);
-                    })
-                    .doOnError(error -> log.debug("[{}] {} {} -> TRANSPORT_ERROR {} ({}ms)",
-                            type != null ? type.getSimpleName() : "ReactiveHttpClient",
-                            request.method(),
-                            request.url(),
-                            error.getClass().getSimpleName(),
-                            System.currentTimeMillis() - startMs));
-        };
     }
 
     private Object resolveSafely(String className) {

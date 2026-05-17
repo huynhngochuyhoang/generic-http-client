@@ -679,10 +679,13 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
 
         LogHttpExchange interfaceLevelAnnotation = resolveInterfaceLevelLogAnnotation(proxy, method);
-        if (interfaceLevelAnnotation == null) {
-            return null;
+        if (interfaceLevelAnnotation != null) {
+            return getOrCreateExchangeLogger(interfaceLevelAnnotation.logger());
         }
-        return getOrCreateExchangeLogger(interfaceLevelAnnotation.logger());
+        if (clientConfig.isExchangeLoggingEnabled()) {
+            return getOrCreateExchangeLogger(DefaultHttpExchangeLogger.class);
+        }
+        return null;
     }
 
     private LogHttpExchange resolveInterfaceLevelLogAnnotation(Object proxy, Method method) {

@@ -22,6 +22,7 @@ import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -207,6 +208,32 @@ class HousekeepingTest {
     }
 
     @Test
+    void clientWideLogExchangeUsesDefaultExchangeLoggerWithConfiguredPreset() throws Throwable {
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(req -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                        .body("ok")
+                        .build()))
+                .build();
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setExchangeLoggingEnabled(true);
+        config.setLogPreset(ReactiveHttpClientProperties.LogPreset.HEADERS);
+        AtomicReference<HttpExchangeLogContext> logged = new AtomicReference<>();
+
+        ReactiveClientInvocationHandler handler = buildHandlerWithCache(
+                webClient, new MethodMetadataCache(), config, new RecordingDefaultHttpExchangeLogger(logged));
+
+        StepVerifier.create(invokeViaSimpleClient(handler))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        assertNotNull(logged.get(), "client-wide log-exchange should route through DefaultHttpExchangeLogger");
+        assertEquals(ReactiveHttpClientProperties.LogPreset.HEADERS, logged.get().logPreset());
+        assertEquals(List.of("text/plain"), logged.get().responseHeaders().get(HttpHeaders.CONTENT_TYPE));
+    }
+
+    @Test
     void methodLevelLogHttpExchangeOverridesInterfaceLevelOnSameClient() throws Throwable {
         WebClient webClient = WebClient.builder()
                 .baseUrl("http://test.local")
@@ -325,18 +352,26 @@ class HousekeepingTest {
     private ReactiveClientInvocationHandler buildHandlerWithCache(
             WebClient webClient,
             MethodMetadataCache cache) {
+        return buildHandlerWithCache(
+                webClient, cache, new ReactiveHttpClientProperties.ClientConfig(), new DefaultHttpExchangeLogger());
+    }
+
+    private ReactiveClientInvocationHandler buildHandlerWithCache(
+            WebClient webClient,
+            MethodMetadataCache cache,
+            ReactiveHttpClientProperties.ClientConfig config,
+            DefaultHttpExchangeLogger defaultLogger) {
         ApplicationContext ctx = mock(ApplicationContext.class);
         ObjectProvider<HttpClientObserver> provider = mock(ObjectProvider.class);
         when(ctx.getBeanProvider(HttpClientObserver.class)).thenReturn(provider);
         when(provider.getIfAvailable()).thenReturn(null);
         // Provide a real DefaultHttpExchangeLogger bean so the logger is resolved via the ApplicationContext
         ObjectProvider<DefaultHttpExchangeLogger> loggerProvider = mock(ObjectProvider.class);
-        when(loggerProvider.getIfAvailable()).thenReturn(new DefaultHttpExchangeLogger());
+        when(loggerProvider.getIfAvailable()).thenReturn(defaultLogger);
         when(ctx.getBeanProvider(DefaultHttpExchangeLogger.class)).thenReturn(loggerProvider);
         ObjectProvider<CountingInheritedClientLogger> inheritedLoggerProvider = mock(ObjectProvider.class);
         when(inheritedLoggerProvider.getIfAvailable()).thenReturn(null);
         when(ctx.getBeanProvider(CountingInheritedClientLogger.class)).thenReturn(inheritedLoggerProvider);
-        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
         return new ReactiveClientInvocationHandler(
                 webClient, cache, new RequestArgumentResolver(),
                 new DefaultErrorDecoder(), config, "test-client", ctx,
@@ -398,6 +433,19 @@ class HousekeepingTest {
         @GET("/items")
         @LogHttpExchange(logger = DefaultHttpExchangeLogger.class)
         Mono<String> call();
+    }
+
+    private static class RecordingDefaultHttpExchangeLogger extends DefaultHttpExchangeLogger {
+        private final AtomicReference<HttpExchangeLogContext> logged;
+
+        private RecordingDefaultHttpExchangeLogger(AtomicReference<HttpExchangeLogContext> logged) {
+            this.logged = logged;
+        }
+
+        @Override
+        public void log(HttpExchangeLogContext context) {
+            logged.set(context);
+        }
     }
 
     public static class CountingInheritedClientLogger implements HttpExchangeLogger {
