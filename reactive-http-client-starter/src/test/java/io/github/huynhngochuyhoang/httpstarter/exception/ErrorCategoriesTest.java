@@ -13,7 +13,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.core.codec.DecodingException;
 
 import javax.net.ssl.SSLHandshakeException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
 import java.net.UnknownHostException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
@@ -57,6 +60,16 @@ class ErrorCategoriesTest {
         assertThat(ErrorCategories.from(new RuntimeException("boom"))).isEqualTo(ErrorCategory.UNKNOWN);
         assertThat(ErrorCategories.from(null)).isNull();
         assertThat(ErrorCategories.from(null, null)).isNull();
+    }
+
+    @Test
+    void doesNotLinkOptionalResilience4jClassesDirectly() throws IOException {
+        String classFile = ErrorCategories.class.getSimpleName() + ".class";
+        try (InputStream input = ErrorCategories.class.getResourceAsStream(classFile)) {
+            assertThat(input).isNotNull();
+            assertThat(new String(input.readAllBytes(), StandardCharsets.ISO_8859_1))
+                    .doesNotContain("io/github/resilience4j");
+        }
     }
 
     private static Stream<Object[]> categoryCases() {

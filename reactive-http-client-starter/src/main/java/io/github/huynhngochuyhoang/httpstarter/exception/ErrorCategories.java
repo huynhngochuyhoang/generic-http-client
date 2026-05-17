@@ -1,8 +1,5 @@
 package io.github.huynhngochuyhoang.httpstarter.exception;
 
-import io.github.resilience4j.bulkhead.BulkheadFullException;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.netty.handler.timeout.ReadTimeoutException;
 import org.springframework.core.codec.DecodingException;
 import reactor.netty.http.client.PrematureCloseException;
@@ -19,6 +16,12 @@ import java.util.concurrent.TimeoutException;
 public final class ErrorCategories {
 
     private static final int MAX_CAUSE_DEPTH = 16;
+    private static final String CIRCUIT_BREAKER_NOT_PERMITTED =
+            "io.github.resilience4j.circuitbreaker.CallNotPermittedException";
+    private static final String BULKHEAD_FULL =
+            "io.github.resilience4j.bulkhead.BulkheadFullException";
+    private static final String RATE_LIMITER_NOT_PERMITTED =
+            "io.github.resilience4j.ratelimiter.RequestNotPermitted";
 
     private ErrorCategories() {
     }
@@ -67,9 +70,9 @@ public final class ErrorCategories {
         if (contains(error, SSLException.class)) {
             return ErrorCategory.TLS_ERROR;
         }
-        if (contains(error, CallNotPermittedException.class)
-                || contains(error, BulkheadFullException.class)
-                || contains(error, RequestNotPermitted.class)) {
+        if (containsClassName(error, CIRCUIT_BREAKER_NOT_PERMITTED)
+                || containsClassName(error, BULKHEAD_FULL)
+                || containsClassName(error, RATE_LIMITER_NOT_PERMITTED)) {
             return ErrorCategory.RESILIENCE_ERROR;
         }
         if (contains(error, UnknownHostException.class)) {
@@ -131,13 +134,27 @@ public final class ErrorCategories {
             if (type.isInstance(current)) {
                 return true;
             }
-            Throwable cause = current.getCause();
-            if (cause == current) {
-                return false;
-            }
-            current = cause;
+            current = nextCause(current);
             depth++;
         }
         return false;
+    }
+
+    private static boolean containsClassName(Throwable error, String className) {
+        Throwable current = error;
+        int depth = 0;
+        while (current != null && depth < MAX_CAUSE_DEPTH) {
+            if (current.getClass().getName().equals(className)) {
+                return true;
+            }
+            current = nextCause(current);
+            depth++;
+        }
+        return false;
+    }
+
+    private static Throwable nextCause(Throwable error) {
+        Throwable cause = error.getCause();
+        return cause != error ? cause : null;
     }
 }
