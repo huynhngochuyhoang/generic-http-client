@@ -20,18 +20,29 @@ class DefaultHttpExchangeLoggerTest {
     void metadataOnlyPresetOmitsHeadersAndBodies(CapturedOutput output) {
         logger.log(context(ReactiveHttpClientProperties.LogPreset.METADATA_ONLY));
 
+        assertThat(output).contains("inboundHeaders={}");
         assertThat(output).contains("reqHeaders={}");
         assertThat(output).contains("respHeaders={}");
         assertThat(output).contains("reqBody=[OMITTED]");
         assertThat(output).contains("respBody=[OMITTED]");
         assertThat(output).doesNotContain("secret-token");
+        assertThat(output).doesNotContain("Inbound=[inbound]");
         assertThat(output).doesNotContain("request-body");
+    }
+
+    @Test
+    void metadataOnlyPresetOmitsInboundHeadersForErrors(CapturedOutput output) {
+        logger.log(context(ReactiveHttpClientProperties.LogPreset.METADATA_ONLY, new IllegalStateException("boom")));
+
+        assertThat(output).contains("inboundHeaders={}");
+        assertThat(output).doesNotContain("Inbound=[inbound]");
     }
 
     @Test
     void headersPresetLogsRedactedHeadersButOmitsBodies(CapturedOutput output) {
         logger.log(context(ReactiveHttpClientProperties.LogPreset.HEADERS));
 
+        assertThat(output).contains("Inbound=[inbound]");
         assertThat(output).contains("X-Request=visible");
         assertThat(output).contains("Authorization=[REDACTED]");
         assertThat(output).contains("Set-Cookie=[[REDACTED]]");
@@ -51,6 +62,10 @@ class DefaultHttpExchangeLoggerTest {
     }
 
     private static HttpExchangeLogContext context(ReactiveHttpClientProperties.LogPreset preset) {
+        return context(preset, null);
+    }
+
+    private static HttpExchangeLogContext context(ReactiveHttpClientProperties.LogPreset preset, Throwable error) {
         return new HttpExchangeLogContext(
                 "orders",
                 "GET",
@@ -64,7 +79,7 @@ class DefaultHttpExchangeLoggerTest {
                 Map.of("Set-Cookie", List.of("session=secret"), "X-Response", List.of("visible")),
                 "response-body",
                 10,
-                null,
+                error,
                 preset);
     }
 }
