@@ -7,15 +7,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.net.URI;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -168,5 +170,91 @@ class DefaultErrorDecoderTest {
                     assertTrue(hce.getMessage().contains("POST https://api.example.com/orders"));
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void shouldUseClientScopedErrorResponseMapperWhenItApplies() {
+        ErrorResponseMapper mapper = new ErrorResponseMapper() {
+            @Override
+            public boolean supports(String clientName) {
+                return "payment-service".equals(clientName);
+            }
+
+            @Override
+            public Optional<? extends Throwable> map(ErrorResponseContext context) {
+                return Optional.of(new PaymentDeclinedException(context.statusCode(), context.responseBody()));
+            }
+        };
+        DefaultErrorDecoder mappedDecoder = new DefaultErrorDecoder("payment-service", List.of(mapper));
+        ClientResponse response = ClientResponse.create(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .body("{\"code\":\"DECLINED\"}")
+                .build();
+
+        StepVerifier.create(mappedDecoder.decode(response))
+                .assertNext(ex -> {
+                    assertEquals(PaymentDeclinedException.class, ex.getClass());
+                    PaymentDeclinedException payment = (PaymentDeclinedException) ex;
+                    assertEquals(422, payment.getStatusCode());
+                    assertEquals("{\"code\":\"DECLINED\"}", payment.getResponseBody());
+                    assertEquals(ErrorCategory.CLIENT_ERROR, payment.getErrorCategory());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldFallBackToDefaultDecoderWhenMapperDoesNotSupportClient() {
+        ErrorResponseMapper mapper = new ErrorResponseMapper() {
+            @Override
+            public boolean supports(String clientName) {
+                return "payment-service".equals(clientName);
+            }
+
+            @Override
+            public Optional<? extends Throwable> map(ErrorResponseContext context) {
+                return Optional.of(new PaymentDeclinedException(context.statusCode(), context.responseBody()));
+            }
+        };
+        DefaultErrorDecoder mappedDecoder = new DefaultErrorDecoder("inventory-service", List.of(mapper));
+        ClientResponse response = ClientResponse.create(HttpStatus.BAD_REQUEST)
+                .body("bad request")
+                .build();
+
+        StepVerifier.create(mappedDecoder.decode(response))
+                .assertNext(ex -> {
+                    assertEquals(HttpClientException.class, ex.getClass());
+                    HttpClientException hce = (HttpClientException) ex;
+                    assertEquals(400, hce.getStatusCode());
+                    assertEquals("bad request", hce.getResponseBody());
+                    assertEquals(ErrorCategory.CLIENT_ERROR, hce.getErrorCategory());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldFallBackToDefaultDecoderWhenMapperCannotParseBody() {
+        ErrorResponseMapper mapper = context -> {
+            throw new IllegalArgumentException("invalid structured body");
+        };
+        DefaultErrorDecoder mappedDecoder = new DefaultErrorDecoder("payment-service", List.of(mapper));
+        ClientResponse response = ClientResponse.create(HttpStatus.BAD_GATEWAY)
+                .body("not-json")
+                .build();
+
+        StepVerifier.create(mappedDecoder.decode(response))
+                .assertNext(ex -> {
+                    assertEquals(RemoteServiceException.class, ex.getClass());
+                    RemoteServiceException rse = (RemoteServiceException) ex;
+                    assertEquals(502, rse.getStatusCode());
+                    assertEquals("not-json", rse.getResponseBody());
+                    assertEquals(ErrorCategory.SERVER_ERROR, rse.getErrorCategory());
+                })
+                .verifyComplete();
+    }
+
+    static final class PaymentDeclinedException extends HttpClientException {
+        PaymentDeclinedException(int statusCode, String responseBody) {
+            super(statusCode, responseBody);
+        }
     }
 }

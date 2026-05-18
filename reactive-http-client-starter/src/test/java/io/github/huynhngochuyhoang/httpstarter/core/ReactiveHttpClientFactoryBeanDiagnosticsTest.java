@@ -82,6 +82,30 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
     }
 
     @Test
+    void annotationBaseUrlTakesPrecedenceOverConfiguredBaseUrl(CapturedOutput output) throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveHttpClientFactoryBean.class);
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.DEBUG);
+
+        ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
+        properties.getClients().put("annotation-url-client", clientConfig("http://property.example"));
+
+        ReactiveHttpClientFactoryBean<AnnotationBaseUrlClient> factoryBean =
+                buildFactoryBean(properties, AnnotationBaseUrlClient.class);
+        try {
+            factoryBean.getObject();
+
+            assertThat(output.getOut())
+                    .contains("Reactive HTTP client [annotation-url-client] startup configuration")
+                    .contains("baseUrl=http://annotation.example (source=annotation)")
+                    .doesNotContain("baseUrl=http://property.example (source=property)");
+        } finally {
+            logger.setLevel(previousLevel);
+            factoryBean.destroy();
+        }
+    }
+
+    @Test
     void failsFastWhenProxyPortIsSetWithoutHost() {
         ReactiveHttpClientProperties properties = new ReactiveHttpClientProperties();
         ReactiveHttpClientProperties.ClientConfig config = clientConfig("http://localhost:8080");
@@ -259,6 +283,11 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
 
     @SuppressWarnings("unchecked")
     private ReactiveHttpClientFactoryBean<DiagnosticClient> buildFactoryBean(ReactiveHttpClientProperties properties) {
+        return buildFactoryBean(properties, DiagnosticClient.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> ReactiveHttpClientFactoryBean<T> buildFactoryBean(ReactiveHttpClientProperties properties, Class<T> type) {
         ApplicationContext ctx = mock(ApplicationContext.class);
 
         ObjectProvider<Object> defaultProvider = mock(ObjectProvider.class);
@@ -297,8 +326,8 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
         when(objectMapperProvider.getIfAvailable()).thenReturn(null);
         when(ctx.getBeanProvider(ObjectMapper.class)).thenReturn(objectMapperProvider);
 
-        ReactiveHttpClientFactoryBean<DiagnosticClient> factoryBean = new ReactiveHttpClientFactoryBean<>();
-        factoryBean.setType(DiagnosticClient.class);
+        ReactiveHttpClientFactoryBean<T> factoryBean = new ReactiveHttpClientFactoryBean<>();
+        factoryBean.setType(type);
         factoryBean.setApplicationContext(ctx);
         return factoryBean;
     }
@@ -311,6 +340,12 @@ class ReactiveHttpClientFactoryBeanDiagnosticsTest {
 
     @ReactiveHttpClient(name = "diagnostic-client")
     interface DiagnosticClient {
+        @GET("/ping")
+        Mono<String> ping();
+    }
+
+    @ReactiveHttpClient(name = "annotation-url-client", baseUrl = "http://annotation.example")
+    interface AnnotationBaseUrlClient {
         @GET("/ping")
         Mono<String> ping();
     }

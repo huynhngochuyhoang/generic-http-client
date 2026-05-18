@@ -4,6 +4,7 @@ import io.github.huynhngochuyhoang.httpstarter.auth.AuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.auth.AwsSigV4AuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.auth.OAuth2ClientCredentialsAuthProviderFactory;
 import io.github.huynhngochuyhoang.httpstarter.core.DefaultErrorDecoder;
+import io.github.huynhngochuyhoang.httpstarter.core.ErrorResponseMapper;
 import io.github.huynhngochuyhoang.httpstarter.core.MethodMetadataCache;
 import io.github.huynhngochuyhoang.httpstarter.filter.CorrelationIdWebFilter;
 import io.github.huynhngochuyhoang.httpstarter.filter.InboundHeadersWebFilter;
@@ -86,8 +87,8 @@ public class ReactiveHttpClientAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DefaultErrorDecoder defaultErrorDecoder() {
-        return new DefaultErrorDecoder();
+    public DefaultErrorDecoder defaultErrorDecoder(ObjectProvider<ErrorResponseMapper> errorResponseMappers) {
+        return new DefaultErrorDecoder(errorResponseMappers);
     }
 
     @Bean

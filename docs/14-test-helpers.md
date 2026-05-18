@@ -40,8 +40,10 @@ User user = mock.proxy().getUser(42).block();
 assertThat(user.getName()).isEqualTo("alice");
 
 RecordedExchange recorded = mock.lastExchange();
-assertThat(recorded.method()).isEqualTo(HttpMethod.GET);
-assertThat(recorded.uri().getPath()).isEqualTo("/users/42");
+RecordedExchangeAssertions.assertThat(recorded)
+        .hasMethod(HttpMethod.GET)
+        .hasPath("/users/42")
+        .hasStatusCode(200);
 ```
 
 ### Unmatched requests
@@ -87,6 +89,8 @@ Every call through the mock proxy is recorded. `RecordedExchange` exposes:
 | `headers()` | `HttpHeaders` | Request headers |
 | `contentType()` | `MediaType` | `Content-Type` header of the request |
 | `header(String)` | `String` | First value of a named header, or `null` |
+| `statusCode()` | `HttpStatusCode` | HTTP status selected by the mock response handler |
+| `statusCodeValue()` | `int` | Numeric HTTP status selected by the mock response handler |
 | `bodyAsString()` | `String` | UTF-8 decoded request body; empty string if no body was written |
 | `materialized()` | `MockClientHttpRequest` | Raw materialised request for low-level inspection |
 
@@ -97,6 +101,54 @@ assertThat(exchange.uri().getPath()).isEqualTo("/users");
 assertThat(exchange.headers().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
 assertThat(exchange.bodyAsString()).contains("\"name\":\"alice\"");
 ```
+
+---
+
+## `RecordedExchangeAssertions`
+
+Use the fluent AssertJ bridge when tests need to assert the request and served response in one chain:
+
+```java
+RecordedExchangeAssertions.assertThat(mock.lastExchange())
+        .hasMethod(HttpMethod.GET)
+        .hasPath("/users")
+        .hasQueryParamValues("tag", "public", "stable")
+        .hasQueryParam("page", "2")
+        .hasHeader("X-Tenant", "acme")
+        .hasStatusCode(200);
+```
+
+For redacted header checks, assert the marker explicitly:
+
+```java
+RecordedExchangeAssertions.assertThat(mock.lastExchange())
+        .hasRedactedHeader("Authorization");
+```
+
+Failure assertions report the expected field and the recorded value:
+
+```java
+RecordedExchangeAssertions.assertThat(mock.lastExchange())
+        .hasPath("/users/42")
+        .hasStatusCode(201);
+```
+
+Available assertion methods:
+
+| Method | Description |
+|---|---|
+| `hasMethod(HttpMethod)` / `hasMethod(String)` | Asserts the HTTP verb |
+| `hasPath(String)` | Asserts the URI path |
+| `hasQueryParam(String, String)` | Asserts one query parameter value |
+| `hasQueryParamValues(String, String...)` | Asserts repeated query parameter values in order |
+| `doesNotHaveQueryParam(String)` | Asserts a query parameter is absent |
+| `hasHeader(String, String)` | Asserts one request header value |
+| `hasHeaderValues(String, String...)` | Asserts repeated request header values in order |
+| `hasRedactedHeader(String)` | Asserts the header value is `[REDACTED]` |
+| `doesNotHaveHeader(String)` | Asserts a request header is absent |
+| `hasBody(String)` | Asserts the full UTF-8 request body |
+| `bodyContains(String)` | Asserts a substring of the UTF-8 request body |
+| `hasStatusCode(int)` | Asserts the served HTTP status |
 
 ---
 
@@ -167,8 +219,10 @@ class UserServiceTest {
         User user = service.getUser("42").block();
         assertThat(user.getId()).isEqualTo(42);
 
-        assertThat(mock.lastExchange().method()).isEqualTo(HttpMethod.GET);
-        assertThat(mock.lastExchange().uri().getPath()).isEqualTo("/users/42");
+        RecordedExchangeAssertions.assertThat(mock.lastExchange())
+                .hasMethod(HttpMethod.GET)
+                .hasPath("/users/42")
+                .hasStatusCode(200);
     }
 }
 ```

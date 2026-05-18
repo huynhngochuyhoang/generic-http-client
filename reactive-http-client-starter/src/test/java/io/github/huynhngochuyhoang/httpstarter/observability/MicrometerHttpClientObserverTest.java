@@ -179,6 +179,46 @@ class MicrometerHttpClientObserverTest {
     }
 
     @Test
+    void usesNoneUriTagByDefault() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(
+                meterRegistry,
+                new ReactiveHttpClientProperties.ObservabilityConfig()
+        );
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 8, null, null, null, "ok"
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
+                .tag("uri", "NONE")
+                .timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count(), 0.0d);
+    }
+
+    @Test
+    void recordsUriTagWhenOptedIn() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ReactiveHttpClientProperties.ObservabilityConfig config =
+                new ReactiveHttpClientProperties.ObservabilityConfig();
+        config.setIncludeUrlPath(true);
+        MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(meterRegistry, config);
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 8, null, null, null, "ok"
+        ));
+
+        Timer timer = meterRegistry.find("reactive.http.client.requests")
+                .tag("uri", "/users/{id}")
+                .timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count(), 0.0d);
+    }
+
+    @Test
     void recordsServerAddressTagsWhenOptedIn() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ReactiveHttpClientProperties.ObservabilityConfig config =
@@ -300,6 +340,7 @@ class MicrometerHttpClientObserverTest {
         ReactiveHttpClientProperties.ObservabilityConfig config =
                 new ReactiveHttpClientProperties.ObservabilityConfig();
         config.getHistogram().setEnabled(true);
+        config.setIncludeUrlPath(true);
 
         MicrometerHttpClientObserver observer = new MicrometerHttpClientObserver(meterRegistry, config);
 
@@ -337,7 +378,7 @@ class MicrometerHttpClientObserverTest {
                 .tag("client.name", "svc")
                 .tag("api.name", "api.op")
                 .tag("http.method", "POST")
-                .tag("uri", "/items")
+                .tag("uri", "NONE")
                 .timer();
         assertNotNull(histogramTimer, "histogram timer must be present");
 

@@ -116,6 +116,50 @@ userApiClient.createUser(badPayload)
 
 ---
 
+## Structured error body mapping
+
+Register `ErrorResponseMapper` beans when one downstream returns structured error
+bodies that should become a more specific exception. Mappers are discovered in
+`@Order` / `Ordered` sequence and can opt in per client with `supports(...)`.
+
+```java
+@Component
+public class PaymentErrorMapper implements ErrorResponseMapper {
+
+    private final ObjectMapper objectMapper;
+
+    public PaymentErrorMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public boolean supports(String clientName) {
+        return "payment-service".equals(clientName);
+    }
+
+    @Override
+    public Optional<? extends Throwable> map(ErrorResponseContext context) throws Exception {
+        PaymentError error = objectMapper.readValue(context.responseBody(), PaymentError.class);
+        if (!"DECLINED".equals(error.code())) {
+            return Optional.empty();
+        }
+        return Optional.of(new PaymentDeclinedException(
+                context.statusCode(),
+                context.responseBody()));
+    }
+}
+```
+
+Return `Optional.empty()` when a mapper does not apply. If a mapper throws while
+parsing an invalid body, the starter logs a warning and falls back to the default
+decoder. The fallback preserves the original HTTP status, raw response body, and
+`ErrorCategory`.
+
+`ErrorResponseContext.defaultException()` is available when a mapper wants to
+inspect or wrap the default `HttpClientException` / `RemoteServiceException`.
+
+---
+
 ## Observability and error categories
 
 The `error.category` tag on the `reactive.http.client.requests` timer and the `error.type` attribute on OTel spans both reflect `ErrorCategory`. This makes error-rate dashboards and alerts easy to slice by failure type (e.g. alert on `SERVER_ERROR` rate > 5 %, ignore `RATE_LIMITED` from alert but feed it into a backpressure dashboard).

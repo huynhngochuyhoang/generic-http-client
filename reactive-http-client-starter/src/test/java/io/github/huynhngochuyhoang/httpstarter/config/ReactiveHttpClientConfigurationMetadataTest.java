@@ -75,6 +75,8 @@ class ReactiveHttpClientConfigurationMetadataTest {
         assertDefaultValue(metadata, "reactive.http.clients.[name].resilience.timeout-ms", 0);
         assertDefaultValue(metadata, "reactive.http.observability.enabled", true);
         assertDefaultValue(metadata, "reactive.http.observability.metric-name", "reactive.http.client.requests");
+        assertDefaultValue(metadata, "reactive.http.observability.include-url-path", false);
+        assertDefaultValue(metadata, "reactive.http.observability.include-server-address", false);
         assertDefaultValue(metadata, "reactive.http.correlation-id.max-length", 128);
     }
 

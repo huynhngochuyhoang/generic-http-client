@@ -52,7 +52,7 @@ class OpenTelemetryHttpClientObserverTest {
     }
 
     @Test
-    void successfulExchangeProducesClientSpanWithStandardAttributes() {
+    void successfulExchangeProducesClientSpanWithConservativeAttributesByDefault() {
         observer.record(new HttpClientObserverEvent(
                 "user-service", "user.get", "GET", "/users/{id}",
                 200, 12L, null, null, null, null,
@@ -66,13 +66,35 @@ class OpenTelemetryHttpClientObserverTest {
 
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_HTTP_METHOD)).isEqualTo("GET");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_HTTP_STATUS_CODE)).isEqualTo(200L);
-        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_ADDRESS)).isEqualTo("api.example.com");
-        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_PORT)).isEqualTo(443L);
-        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_URL_TEMPLATE)).isEqualTo("/users/{id}");
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_ADDRESS)).isNull();
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_PORT)).isNull();
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_URL_TEMPLATE)).isNull();
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_CLIENT_NAME)).isEqualTo("user-service");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_API_NAME)).isEqualTo("user.get");
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_ATTEMPT_COUNT)).isEqualTo(1L);
         assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_RESPONSE_BYTES)).isEqualTo(256L);
+    }
+
+    @Test
+    void urlTemplateAndServerAttributesAreRecordedWhenOptedIn() {
+        ReactiveHttpClientProperties.ObservabilityConfig config =
+                new ReactiveHttpClientProperties.ObservabilityConfig();
+        config.setIncludeUrlPath(true);
+        config.setIncludeServerAddress(true);
+        observer = new OpenTelemetryHttpClientObserver(OpenTelemetrySdk.builder()
+                .setTracerProvider(tracerProvider)
+                .build(), config);
+
+        observer.record(new HttpClientObserverEvent(
+                "user-service", "user.get", "GET", "/users/{id}",
+                200, 12L, null, null, null, null,
+                1, 0L, 256L, "api.example.com", 443
+        ));
+
+        SpanData span = onlySpan();
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_URL_TEMPLATE)).isEqualTo("/users/{id}");
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_ADDRESS)).isEqualTo("api.example.com");
+        assertThat(span.getAttributes().get(OpenTelemetryHttpClientObserver.ATTR_SERVER_PORT)).isEqualTo(443L);
     }
 
     @Test

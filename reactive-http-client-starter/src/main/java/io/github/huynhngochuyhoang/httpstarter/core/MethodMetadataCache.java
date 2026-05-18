@@ -215,6 +215,7 @@ public class MethodMetadataCache {
         }
 
         meta.freezeCollections();
+        meta.setRequestPlan(RequestPlan.from(meta));
         return meta;
     }
 

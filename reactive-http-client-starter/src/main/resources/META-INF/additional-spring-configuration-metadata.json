@@ -605,14 +605,14 @@
     {
       "name": "reactive.http.observability.include-url-path",
       "type": "java.lang.Boolean",
-      "description": "Include the URL path template as a metric tag. Disable for high-cardinality paths. Default: true.",
+      "description": "Include the URL path template as a Micrometer tag and OpenTelemetry url.template attribute. Opt in only when path templates are bounded and do not contain raw IDs. Default: false.",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ObservabilityConfig",
-      "defaultValue": true
+      "defaultValue": false
     },
     {
       "name": "reactive.http.observability.include-server-address",
       "type": "java.lang.Boolean",
-      "description": "Include resolved server.address and server.port as Micrometer metric tags. Disabled by default because upstream hosts can be high-cardinality.",
+      "description": "Include resolved server.address and server.port as Micrometer metric tags and OpenTelemetry span attributes. Disabled by default because upstream hosts can be high-cardinality.",
       "sourceType": "io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties$ObservabilityConfig",
       "defaultValue": false
     },
