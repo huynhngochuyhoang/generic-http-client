@@ -187,6 +187,7 @@ public final class MockReactiveHttpClient<T> {
                                     request.method(),
                                     URI.create(request.url().toString()),
                                     materialized);
+                            exchanges.add(requestExchange);
                             ClientResponse response = fallbackRef.get();
                             for (Matcher matcher : liveMatchers) {
                                 if (matcher.predicate.test(requestExchange)) {
@@ -194,7 +195,7 @@ public final class MockReactiveHttpClient<T> {
                                     break;
                                 }
                             }
-                            exchanges.add(new RecordedExchange(
+                            exchanges.set(exchanges.indexOf(requestExchange), new RecordedExchange(
                                     request.method(),
                                     URI.create(request.url().toString()),
                                     materialized,

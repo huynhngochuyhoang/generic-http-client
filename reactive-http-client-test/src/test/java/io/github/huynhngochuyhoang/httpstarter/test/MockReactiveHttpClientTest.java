@@ -53,6 +53,23 @@ class MockReactiveHttpClientTest {
     }
 
     @Test
+    void recordsExchangeWhenHandlerThrows() {
+        MockReactiveHttpClient<SampleClient> mock = MockReactiveHttpClient.forClient(SampleClient.class)
+                .respondTo(HttpMethod.GET, "/users/42",
+                        ex -> { throw new IllegalStateException("handler failed"); })
+                .build();
+
+        StepVerifier.create(mock.proxy().getUser(42))
+                .expectErrorMessage("handler failed")
+                .verify();
+
+        assertThat(mock.exchanges()).hasSize(1);
+        RecordedExchangeAssertions.assertThat(mock.lastExchange())
+                .hasMethod(HttpMethod.GET)
+                .hasPath("/users/42");
+    }
+
+    @Test
     void capturesPostBodyForAssertion() {
         MockReactiveHttpClient<SampleClient> mock = MockReactiveHttpClient.forClient(SampleClient.class)
                 .respondTo(HttpMethod.POST, "/users",
