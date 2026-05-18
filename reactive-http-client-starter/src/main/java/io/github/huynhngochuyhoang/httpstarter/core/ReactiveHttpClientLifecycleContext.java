@@ -1,9 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
 import java.net.URI;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Immutable call state passed to {@link ReactiveHttpClientLifecycleHook} methods.
@@ -59,7 +57,11 @@ public record ReactiveHttpClientLifecycleContext(
             return Map.of();
         }
         Map<String, List<Object>> copied = new LinkedHashMap<>();
-        source.forEach((key, values) -> copied.put(key, values != null ? List.copyOf(values) : List.of()));
+        source.forEach((key, values) -> copied.put(key, values != null ? copyNullableElements(values) : List.of()));
         return Map.copyOf(copied);
+    }
+
+    private static List<Object> copyNullableElements(List<Object> values) {
+        return Collections.unmodifiableList(new ArrayList<>(values));
     }
 }
