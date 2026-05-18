@@ -59,6 +59,7 @@ public class MethodMetadata {
     private String circuitBreakerInstanceName;
     private String bulkheadInstanceName;
     private String rateLimiterInstanceName;
+    private RequestPlan requestPlan;
 
     /**
      * Resolved {@link HttpExchangeLogger} instance cached after first resolution.
@@ -143,6 +144,9 @@ public class MethodMetadata {
     public void setRateLimiterInstanceName(String rateLimiterInstanceName) {
         this.rateLimiterInstanceName = rateLimiterInstanceName;
     }
+
+    RequestPlan getRequestPlan() { return requestPlan; }
+    void setRequestPlan(RequestPlan requestPlan) { this.requestPlan = requestPlan; }
 
     /**
      * Returns the cached exchange-logger for this method, or {@code null} if it has

@@ -1,0 +1,89 @@
+package io.github.huynhngochuyhoang.httpstarter.core;
+
+import io.github.huynhngochuyhoang.httpstarter.annotation.FormFile;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Immutable request-shape decisions parsed from a client method.
+ *
+ * <p>Invocation arguments are still resolved per call by {@link RequestArgumentResolver};
+ * this plan only carries stable annotation-derived bindings.
+ */
+record RequestPlan(
+        Method method,
+        String apiName,
+        String apiRefName,
+        EffectiveApi staticEffectiveApi,
+        String httpMethod,
+        String pathTemplate,
+        List<NamedArgumentBinding> pathVars,
+        List<NamedArgumentBinding> queryParams,
+        List<NamedArgumentBinding> headerParams,
+        Set<Integer> headerMapParams,
+        int bodyIndex,
+        boolean multipart,
+        List<FormFieldBinding> formFields,
+        List<FormFileBinding> formFiles,
+        boolean returnsFlux,
+        Type responseType,
+        long timeoutMs,
+        String retryInstanceName,
+        String circuitBreakerInstanceName,
+        String bulkheadInstanceName,
+        String rateLimiterInstanceName
+) {
+
+    static RequestPlan from(MethodMetadata meta) {
+        return new RequestPlan(
+                meta.getMethod(),
+                meta.getApiName(),
+                meta.getApiRefName(),
+                meta.getStaticEffectiveApi(),
+                meta.getHttpMethod(),
+                meta.getPathTemplate(),
+                namedBindings(meta.getPathVars()),
+                namedBindings(meta.getQueryParams()),
+                namedBindings(meta.getHeaderParams()),
+                Set.copyOf(meta.getHeaderMapParams()),
+                meta.getBodyIndex(),
+                meta.isMultipart(),
+                formFieldBindings(meta.getFormFieldParams()),
+                formFileBindings(meta.getFormFileParams()),
+                meta.isReturnsFlux(),
+                meta.getResponseType(),
+                meta.getTimeoutMs(),
+                meta.getRetryInstanceName(),
+                meta.getCircuitBreakerInstanceName(),
+                meta.getBulkheadInstanceName(),
+                meta.getRateLimiterInstanceName());
+    }
+
+    private static List<NamedArgumentBinding> namedBindings(Map<Integer, String> source) {
+        return source.entrySet().stream()
+                .map(entry -> new NamedArgumentBinding(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    private static List<FormFieldBinding> formFieldBindings(Map<Integer, String> source) {
+        return source.entrySet().stream()
+                .map(entry -> new FormFieldBinding(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    private static List<FormFileBinding> formFileBindings(Map<Integer, FormFile> source) {
+        return source.entrySet().stream()
+                .map(entry -> new FormFileBinding(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    record NamedArgumentBinding(int argumentIndex, String name) {}
+
+    record FormFieldBinding(int argumentIndex, String name) {}
+
+    record FormFileBinding(int argumentIndex, FormFile annotation) {}
+}

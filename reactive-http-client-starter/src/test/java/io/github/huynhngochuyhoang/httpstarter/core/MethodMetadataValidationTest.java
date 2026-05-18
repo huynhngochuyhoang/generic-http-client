@@ -1,19 +1,12 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
-import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
-import io.github.huynhngochuyhoang.httpstarter.annotation.LogHttpExchange;
-import io.github.huynhngochuyhoang.httpstarter.annotation.PATCH;
-import io.github.huynhngochuyhoang.httpstarter.annotation.ApiRef;
+import io.github.huynhngochuyhoang.httpstarter.annotation.*;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MethodMetadataValidationTest {
 
@@ -42,6 +35,30 @@ class MethodMetadataValidationTest {
         assertThrows(UnsupportedOperationException.class, () -> metadata.getQueryParams().put(0, "q"));
         assertThrows(UnsupportedOperationException.class, () -> metadata.getHeaderParams().put(0, "X-Test"));
         assertThrows(UnsupportedOperationException.class, () -> metadata.getHeaderMapParams().add(0));
+    }
+
+    @Test
+    void shouldBuildImmutableRequestPlanAfterParsing() throws Exception {
+        Method method = RequestPlanClient.class.getMethod("create", String.class, String.class, String.class, String.class);
+        MethodMetadata metadata = new MethodMetadataCache().get(method);
+        RequestPlan plan = metadata.getRequestPlan();
+
+        assertEquals(method, plan.method());
+        assertEquals("create", plan.apiName());
+        assertEquals("POST", plan.httpMethod());
+        assertEquals("/items/{id}", plan.pathTemplate());
+        assertEquals(0, plan.pathVars().get(0).argumentIndex());
+        assertEquals("id", plan.pathVars().get(0).name());
+        assertEquals(1, plan.queryParams().get(0).argumentIndex());
+        assertEquals("locale", plan.queryParams().get(0).name());
+        assertEquals(2, plan.headerParams().get(0).argumentIndex());
+        assertEquals("X-Tenant", plan.headerParams().get(0).name());
+        assertEquals(3, plan.bodyIndex());
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> plan.pathVars().add(new RequestPlan.NamedArgumentBinding(9, "other")));
+        assertThrows(UnsupportedOperationException.class,
+                () -> plan.headerMapParams().add(9));
     }
 
     @Test
@@ -85,6 +102,15 @@ class MethodMetadataValidationTest {
     interface PatchClient {
         @PATCH("/items/1")
         Mono<String> patch();
+    }
+
+    interface RequestPlanClient {
+        @POST("/items/{id}")
+        Mono<String> create(
+                @PathVar("id") String id,
+                @QueryParam("locale") String locale,
+                @HeaderParam("X-Tenant") String tenant,
+                @Body String body);
     }
 
     @LogHttpExchange(logger = DefaultHttpExchangeLogger.class)

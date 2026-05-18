@@ -12,7 +12,7 @@
 <dependency>
   <groupId>io.github.huynhngochuyhoang</groupId>
   <artifactId>reactive-http-client-starter</artifactId>
-  <version>2.2.0</version>
+  <version>2.3.0</version>
 </dependency>
 ```
 
@@ -207,7 +207,7 @@ reactive:
     observability:
       enabled: true
       metric-name: reactive.http.client.requests
-      include-url-path: true
+      include-url-path: false
       include-server-address: false
       log-request-body: false
       log-response-body: false
@@ -230,3 +230,5 @@ reactive:
 | Proxy & TLS/mTLS | [12-proxy-tls.md](12-proxy-tls.md) |
 | Exchange logging | [13-exchange-logging.md](13-exchange-logging.md) |
 | Test helpers | [14-test-helpers.md](14-test-helpers.md) |
+| Conflict and cardinality guardrails | [18-conflict-cardinality-guardrails.md](18-conflict-cardinality-guardrails.md) |
+| Configuration properties | [configuration-properties.md](configuration-properties.md) |

@@ -7,61 +7,61 @@
 
 ## Priority 1 — Documentation and test-helper ergonomics
 
-### [ ] 2.2 Documentation as release artifact
-- [ ] Add local documentation link validation.
-- [ ] Check README and quick-start version snippets against `project.version`.
-- [ ] Decide whether to generate a property reference from configuration metadata.
-- [ ] If generated, add the generated reference and CI guard.
+### [x] 2.2 Documentation as release artifact
+- [x] Add local documentation link validation.
+- [x] Check README and quick-start version snippets against `project.version`.
+- [x] Decide whether to generate a property reference from configuration metadata.
+- [x] If generated, add the generated reference and CI guard.
 
-### [ ] 2.3 Test helper ergonomics
-- [ ] Add fluent assertions for `RecordedExchange`.
-- [ ] Cover method, path, query, headers, body, and status assertions.
-- [ ] Add helpers for repeated query params and redacted headers.
-- [ ] Document common success and failure examples.
+### [x] 2.3 Test helper ergonomics
+- [x] Add fluent assertions for `RecordedExchange`.
+- [x] Cover method, path, query, headers, body, and status assertions.
+- [x] Add helpers for repeated query params and redacted headers.
+- [x] Document common success and failure examples.
 
 ---
 
 ## Priority 2 — Conflict and cardinality guardrails
 
-### [ ] 3.1 Annotation and configuration conflict audit
-- [ ] Document precedence for annotations, `@ApiRef`, defaults, auth, customizers,
+### [x] 3.1 Annotation and configuration conflict audit
+- [x] Document precedence for annotations, `@ApiRef`, defaults, auth, customizers,
   resilience, and logging.
-- [ ] Add tests for each documented precedence path.
-- [ ] Fail fast or document behavior for any remaining ambiguity.
+- [x] Add tests for each documented precedence path.
+- [x] Fail fast or document behavior for any remaining ambiguity.
 
-### [ ] 3.2 Observability cardinality guardrails
-- [ ] Audit Micrometer tags and OpenTelemetry attributes for high-cardinality risk.
-- [ ] Keep risky dimensions opt-in.
-- [ ] Add warnings or metadata guidance for risky settings.
-- [ ] Add tests for conservative defaults.
+### [x] 3.2 Observability cardinality guardrails
+- [x] Audit Micrometer tags and OpenTelemetry attributes for high-cardinality risk.
+- [x] Keep risky dimensions opt-in.
+- [x] Add warnings or metadata guidance for risky settings.
+- [x] Add tests for conservative defaults.
 
 ---
 
 ## Priority 3 — Invocation internals
 
-### [ ] 2.1 Request plan model
-- [ ] Introduce an immutable request plan where it simplifies metadata use.
-- [ ] Move stable request decisions out of the per-call path.
-- [ ] Keep dynamic argument resolution explicit.
-- [ ] Capture allocation notes in the implementation PR.
-- [ ] Ensure behavior tests pass unchanged.
+### [x] 2.1 Request plan model
+- [x] Introduce an immutable request plan where it simplifies metadata use.
+- [x] Move stable request decisions out of the per-call path.
+- [x] Keep dynamic argument resolution explicit.
+- [x] Capture allocation notes in the implementation PR.
+- [x] Ensure behavior tests pass unchanged.
 
 ---
 
 ## Priority 4 — Lifecycle and error mapping extensions
 
-### [ ] 1.1 Client lifecycle hooks
-- [ ] Add a small lifecycle SPI for start, success, error, cancellation, and retry
+### [x] 1.1 Client lifecycle hooks
+- [x] Add a small lifecycle SPI for start, success, error, cancellation, and retry
   attempt boundaries.
-- [ ] Define ordering and failure isolation.
-- [ ] Add tests for multiple hook beans.
-- [ ] Document hooks vs customizers vs observers.
+- [x] Define ordering and failure isolation.
+- [x] Add tests for multiple hook beans.
+- [x] Document hooks vs customizers vs observers.
 
-### [ ] 1.2 Declarative response error decoding policy
-- [ ] Add per-client structured error body mapper support.
-- [ ] Preserve status, response body, and `ErrorCategory`.
-- [ ] Fall back to the existing default decoder when no mapper applies.
-- [ ] Add mapper hit, miss, invalid-body, and fallback tests.
+### [x] 1.2 Declarative response error decoding policy
+- [x] Add per-client structured error body mapper support.
+- [x] Preserve status, response body, and `ErrorCategory`.
+- [x] Fall back to the existing default decoder when no mapper applies.
+- [x] Add mapper hit, miss, invalid-body, and fallback tests.
 
 ---
 

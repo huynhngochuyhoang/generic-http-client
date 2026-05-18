@@ -2,14 +2,20 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 
 import io.github.huynhngochuyhoang.httpstarter.exception.HttpClientException;
 import io.github.huynhngochuyhoang.httpstarter.exception.RemoteServiceException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Translates HTTP error responses into domain exceptions.
@@ -20,7 +26,35 @@ import java.nio.charset.StandardCharsets;
  */
 public class DefaultErrorDecoder {
 
+    private static final Logger log = LoggerFactory.getLogger(DefaultErrorDecoder.class);
     private static final int MAX_ERROR_BODY_BYTES = 4096;
+
+    private final String clientName;
+    private final List<ErrorResponseMapper> errorResponseMappers;
+
+    public DefaultErrorDecoder() {
+        this(null, List.of());
+    }
+
+    public DefaultErrorDecoder(ObjectProvider<ErrorResponseMapper> errorResponseMappers) {
+        this(null, resolveMappers(errorResponseMappers));
+    }
+
+    public DefaultErrorDecoder(String clientName, List<ErrorResponseMapper> errorResponseMappers) {
+        this.clientName = clientName;
+        this.errorResponseMappers = errorResponseMappers != null ? List.copyOf(errorResponseMappers) : List.of();
+    }
+
+    /**
+     * Returns a client-scoped decoder when this is the starter's default decoder.
+     * Custom subclasses keep their own implementation unchanged.
+     */
+    public DefaultErrorDecoder forClient(String clientName) {
+        if (getClass() != DefaultErrorDecoder.class) {
+            return this;
+        }
+        return new DefaultErrorDecoder(clientName, errorResponseMappers);
+    }
 
     /**
      * Returns a {@code Mono} that immediately signals an appropriate exception for the
@@ -31,20 +65,43 @@ public class DefaultErrorDecoder {
         RequestContext requestContext = resolveRequestContext(response);
         return readBodyWithCap(response, MAX_ERROR_BODY_BYTES)
                 .defaultIfEmpty("")
-                .map(body -> {
-                    if (code >= 400 && code < 500) {
-                        return (Throwable) new HttpClientException(
-                                code,
-                                body,
-                                requestContext.method(),
-                                requestContext.url());
-                    }
-                    return new RemoteServiceException(
-                            code,
-                            body,
-                            requestContext.method(),
-                            requestContext.url());
-                });
+                .map(body -> mapOrDefault(response, code, body, requestContext));
+    }
+
+    private Throwable mapOrDefault(ClientResponse response, int code, String body, RequestContext requestContext) {
+        ErrorResponseContext context = new ErrorResponseContext(
+                clientName,
+                code,
+                body,
+                resolveResponseHeaders(response),
+                requestContext.method(),
+                requestContext.url(),
+                null);
+        for (ErrorResponseMapper mapper : errorResponseMappers) {
+            if (!supports(mapper, clientName)) {
+                continue;
+            }
+            try {
+                Optional<? extends Throwable> mapped = mapper.map(context);
+                if (mapped != null && mapped.isPresent()) {
+                    return mapped.get();
+                }
+            } catch (Exception ex) {
+                log.warn("ErrorResponseMapper [{}] failed for client [{}] status [{}] - falling back to default decoder: {}",
+                        mapper.getClass().getName(), clientName, code, ex.getMessage());
+            }
+        }
+        return context.defaultException();
+    }
+
+    private boolean supports(ErrorResponseMapper mapper, String clientName) {
+        try {
+            return mapper.supports(clientName);
+        } catch (Exception ex) {
+            log.warn("ErrorResponseMapper [{}] supports() failed for client [{}] - skipping mapper: {}",
+                    mapper.getClass().getName(), clientName, ex.getMessage());
+            return false;
+        }
     }
 
     private Mono<String> readBodyWithCap(ClientResponse response, int maxBytes) {
@@ -84,7 +141,24 @@ public class DefaultErrorDecoder {
         }
     }
 
+    private HttpHeaders resolveResponseHeaders(ClientResponse response) {
+        try {
+            ClientResponse.Headers headers = response.headers();
+            return headers != null ? headers.asHttpHeaders() : HttpHeaders.EMPTY;
+        } catch (UnsupportedOperationException ignored) {
+            return HttpHeaders.EMPTY;
+        }
+    }
+
     private record RequestContext(String method, String url) {
         private static final RequestContext EMPTY = new RequestContext(null, null);
+    }
+
+    private static List<ErrorResponseMapper> resolveMappers(ObjectProvider<ErrorResponseMapper> provider) {
+        if (provider == null) {
+            return List.of();
+        }
+        java.util.stream.Stream<ErrorResponseMapper> stream = provider.orderedStream();
+        return stream != null ? stream.toList() : List.of();
     }
 }

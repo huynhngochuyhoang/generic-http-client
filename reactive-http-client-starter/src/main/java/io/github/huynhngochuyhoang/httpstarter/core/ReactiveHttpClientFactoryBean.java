@@ -106,7 +106,8 @@ public class ReactiveHttpClientFactoryBean<T> implements FactoryBean<T>, Applica
 
         DefaultErrorDecoder errorDecoder = applicationContext
                 .getBeanProvider(DefaultErrorDecoder.class)
-                .getIfAvailable(DefaultErrorDecoder::new);
+                .getIfAvailable(DefaultErrorDecoder::new)
+                .forClient(clientName);
 
         Object circuitBreakerRegistry = resolveSafely("io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry");
         Object retryRegistry = resolveSafely("io.github.resilience4j.retry.RetryRegistry");

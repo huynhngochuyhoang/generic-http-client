@@ -1,8 +1,10 @@
 package io.github.huynhngochuyhoang.httpstarter.otel;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.opentelemetry.api.OpenTelemetry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
         name = "enabled",
         havingValue = "true",
         matchIfMissing = true)
+@EnableConfigurationProperties(ReactiveHttpClientProperties.class)
 public class OpenTelemetryHttpClientAutoConfiguration {
 
     @Configuration(proxyBeanMethods = false)
@@ -39,8 +42,10 @@ public class OpenTelemetryHttpClientAutoConfiguration {
 
         @Bean(name = "openTelemetryHttpClientObserver")
         @ConditionalOnMissingBean(name = "openTelemetryHttpClientObserver")
-        OpenTelemetryHttpClientObserver openTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
-            return new OpenTelemetryHttpClientObserver(openTelemetry);
+        OpenTelemetryHttpClientObserver openTelemetryHttpClientObserver(
+                OpenTelemetry openTelemetry,
+                ReactiveHttpClientProperties properties) {
+            return new OpenTelemetryHttpClientObserver(openTelemetry, properties.getObservability());
         }
     }
 

@@ -1,5 +1,6 @@
 package io.github.huynhngochuyhoang.httpstarter.otel;
 
+import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
 import io.opentelemetry.api.OpenTelemetry;
@@ -65,9 +66,16 @@ public class OpenTelemetryHttpClientObserver implements HttpClientObserver {
     static final AttributeKey<Long> ATTR_RESPONSE_BYTES = AttributeKey.longKey("rhttp.response.bytes");
 
     private final Tracer tracer;
+    private final ReactiveHttpClientProperties.ObservabilityConfig config;
 
     public OpenTelemetryHttpClientObserver(OpenTelemetry openTelemetry) {
+        this(openTelemetry, new ReactiveHttpClientProperties.ObservabilityConfig());
+    }
+
+    public OpenTelemetryHttpClientObserver(OpenTelemetry openTelemetry,
+                                           ReactiveHttpClientProperties.ObservabilityConfig config) {
         this.tracer = openTelemetry.getTracer(INSTRUMENTATION_NAME);
+        this.config = config != null ? config : new ReactiveHttpClientProperties.ObservabilityConfig();
     }
 
     @Override
@@ -85,16 +93,16 @@ public class OpenTelemetryHttpClientObserver implements HttpClientObserver {
                     .setAttribute(ATTR_API_NAME, nullToUnknown(event.getApiName()))
                     .setAttribute(ATTR_ATTEMPT_COUNT, (long) event.getAttemptCount());
 
-            if (event.getUriPath() != null) {
+            if (config.isIncludeUrlPath() && event.getUriPath() != null) {
                 builder.setAttribute(ATTR_URL_TEMPLATE, event.getUriPath());
             }
             if (event.getStatusCode() != null) {
                 builder.setAttribute(ATTR_HTTP_STATUS_CODE, (long) event.getStatusCode());
             }
-            if (event.getServerAddress() != null) {
+            if (config.isIncludeServerAddress() && event.getServerAddress() != null) {
                 builder.setAttribute(ATTR_SERVER_ADDRESS, event.getServerAddress());
             }
-            if (event.getServerPort() != null) {
+            if (config.isIncludeServerAddress() && event.getServerPort() != null) {
                 builder.setAttribute(ATTR_SERVER_PORT, (long) event.getServerPort());
             }
             if (event.getRequestBytes() >= 0) {

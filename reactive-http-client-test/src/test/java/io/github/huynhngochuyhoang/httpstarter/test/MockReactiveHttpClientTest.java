@@ -1,14 +1,13 @@
 package io.github.huynhngochuyhoang.httpstarter.test;
 
-import io.github.huynhngochuyhoang.httpstarter.annotation.Body;
-import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
-import io.github.huynhngochuyhoang.httpstarter.annotation.POST;
-import io.github.huynhngochuyhoang.httpstarter.annotation.PathVar;
+import io.github.huynhngochuyhoang.httpstarter.annotation.*;
 import io.github.huynhngochuyhoang.httpstarter.exception.ErrorCategory;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,6 +25,11 @@ class MockReactiveHttpClientTest {
 
         @POST("/users")
         Mono<String> createUser(@Body String json);
+
+        @GET("/search")
+        Mono<String> search(@QueryParam("tag") List<String> tags,
+                            @QueryParam("page") int page,
+                            @HeaderParam("Authorization") String authorization);
     }
 
     @Test
@@ -42,8 +46,27 @@ class MockReactiveHttpClientTest {
 
         assertThat(mock.exchanges()).hasSize(1);
         RecordedExchange recorded = mock.lastExchange();
-        assertThat(recorded.method()).isEqualTo(HttpMethod.GET);
-        assertThat(recorded.uri().getPath()).isEqualTo("/users/42");
+        RecordedExchangeAssertions.assertThat(recorded)
+                .hasMethod(HttpMethod.GET)
+                .hasPath("/users/42")
+                .hasStatusCode(200);
+    }
+
+    @Test
+    void recordsExchangeWhenHandlerThrows() {
+        MockReactiveHttpClient<SampleClient> mock = MockReactiveHttpClient.forClient(SampleClient.class)
+                .respondTo(HttpMethod.GET, "/users/42",
+                        ex -> { throw new IllegalStateException("handler failed"); })
+                .build();
+
+        StepVerifier.create(mock.proxy().getUser(42))
+                .expectErrorMessage("handler failed")
+                .verify();
+
+        assertThat(mock.exchanges()).hasSize(1);
+        RecordedExchangeAssertions.assertThat(mock.lastExchange())
+                .hasMethod(HttpMethod.GET)
+                .hasPath("/users/42");
     }
 
     @Test
@@ -55,7 +78,29 @@ class MockReactiveHttpClientTest {
 
         mock.proxy().createUser("{\"name\":\"alice\"}").block();
 
-        assertThat(mock.lastExchange().bodyAsString()).contains("\"name\":\"alice\"");
+        RecordedExchangeAssertions.assertThat(mock.lastExchange())
+                .bodyContains("\"name\":\"alice\"")
+                .hasStatusCode(201);
+    }
+
+    @Test
+    void recordedExchangeAssertionsCoverQueryHeadersAndRedactionMarker() {
+        MockReactiveHttpClient<SampleClient> mock = MockReactiveHttpClient.forClient(SampleClient.class)
+                .respondTo(HttpMethod.GET, "/search",
+                        ex -> MockReactiveHttpClient.json(202, "\"ok\""))
+                .build();
+
+        mock.proxy().search(List.of("public", "stable"), 2, "[REDACTED]").block();
+
+        RecordedExchangeAssertions.assertThat(mock.lastExchange())
+                .hasMethod("GET")
+                .hasPath("/search")
+                .hasQueryParamValues("tag", "public", "stable")
+                .hasQueryParam("page", "2")
+                .doesNotHaveQueryParam("missing")
+                .hasRedactedHeader("Authorization")
+                .doesNotHaveHeader("X-Missing")
+                .hasStatusCode(202);
     }
 
     @Test

@@ -21,7 +21,7 @@ End-to-end duration from first attempt to final completion (after all retries).
 | `outcome` | `SUCCESS`, `REDIRECTION`, `CLIENT_ERROR`, `SERVER_ERROR`, `UNKNOWN` |
 | `exception` | Simple class name of the thrown exception, or `none` |
 | `error.category` | `ErrorCategory` value — see [03-error-handling.md](03-error-handling.md) |
-| `uri` | Path template (e.g. `/users/{id}`), or `NONE`; disable with `include-url-path: false` |
+| `uri` | Path template (e.g. `/users/{id}`) when opted in, otherwise `NONE`; enable with `include-url-path: true` |
 | `server.address` | Resolved upstream host; opt in with `include-server-address: true` |
 | `server.port` | Resolved upstream port; opt in with `include-server-address: true` |
 
@@ -66,8 +66,8 @@ reactive:
     observability:
       enabled: true
       metric-name: reactive.http.client.requests   # custom timer/counter name
-      include-url-path: true              # set false for high-cardinality paths
-      include-server-address: false       # opt-in server.address/server.port metric tags
+      include-url-path: false             # opt-in path template metric tags and span attributes
+      include-server-address: false       # opt-in server.address/server.port tags and span attributes
       log-request-body: false             # include body in span events (PII risk)
       log-response-body: false
       histogram:
@@ -75,7 +75,7 @@ reactive:
         slo-boundaries-ms: [50, 100, 200, 500, 1000, 2000, 5000]
 ```
 
-> **Production recommendation:** enable body logging only when truly required, and always apply PII masking before the data leaves your network boundary.
+> **Production recommendation:** keep path, server address, and body dimensions disabled unless you have verified they are bounded. See [18-conflict-cardinality-guardrails.md](18-conflict-cardinality-guardrails.md).
 
 ---
 
@@ -204,9 +204,9 @@ reactive:
 | Span kind | `CLIENT` |
 | `http.request.method` | HTTP verb |
 | `http.response.status_code` | Response status code |
-| `server.address` | Resolved upstream host |
-| `server.port` | Resolved upstream port |
-| `url.template` | Path template, e.g. `/users/{id}` |
+| `server.address` | Resolved upstream host; opt in with `include-server-address: true` |
+| `server.port` | Resolved upstream port; opt in with `include-server-address: true` |
+| `url.template` | Path template, e.g. `/users/{id}`; opt in with `include-url-path: true` |
 | `error.type` | `ErrorCategory` name; falls back to the exception's simple class name |
 | `rhttp.client.name` | Logical client name |
 | `rhttp.api.name` | `@ApiName` value or method name |

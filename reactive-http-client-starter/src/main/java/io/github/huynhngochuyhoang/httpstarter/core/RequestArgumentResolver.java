@@ -15,36 +15,40 @@ import java.util.*;
 public class RequestArgumentResolver {
 
     public ResolvedArgs resolve(MethodMetadata meta, Object[] args) {
+        return resolve(meta.getRequestPlan() != null ? meta.getRequestPlan() : RequestPlan.from(meta), args);
+    }
+
+    public ResolvedArgs resolve(RequestPlan plan, Object[] args) {
         Map<String, Object> pathVars = new LinkedHashMap<>();
         Map<String, List<Object>> queryParams = new LinkedHashMap<>();
         Map<String, String> headers = new LinkedHashMap<>();
         Object body = null;
 
-        for (Map.Entry<Integer, String> entry : meta.getPathVars().entrySet()) {
-            int idx = entry.getKey();
+        for (RequestPlan.NamedArgumentBinding binding : plan.pathVars()) {
+            int idx = binding.argumentIndex();
             if (args != null && idx < args.length && args[idx] != null) {
-                pathVars.put(entry.getValue(), args[idx]);
+                pathVars.put(binding.name(), args[idx]);
             }
         }
 
-        for (Map.Entry<Integer, String> entry : meta.getQueryParams().entrySet()) {
-            int idx = entry.getKey();
+        for (RequestPlan.NamedArgumentBinding binding : plan.queryParams()) {
+            int idx = binding.argumentIndex();
             if (args != null && idx < args.length && args[idx] != null) {
-                queryParams.put(entry.getValue(), toValueList(args[idx]));
+                queryParams.put(binding.name(), toValueList(args[idx]));
             }
         }
 
-        for (Map.Entry<Integer, String> entry : meta.getHeaderParams().entrySet()) {
-            int idx = entry.getKey();
+        for (RequestPlan.NamedArgumentBinding binding : plan.headerParams()) {
+            int idx = binding.argumentIndex();
             if (args != null && idx < args.length && args[idx] != null) {
-                String headerName = entry.getValue();
+                String headerName = binding.name();
                 String headerValue = String.valueOf(args[idx]);
                 validateHeaderName(headerName);
                 validateHeaderValue(headerName, headerValue);
                 headers.put(headerName, headerValue);
             }
         }
-        for (Integer idx : meta.getHeaderMapParams()) {
+        for (Integer idx : plan.headerMapParams()) {
             if (args != null && idx < args.length && args[idx] instanceof Map<?, ?> headerMap) {
                 for (Map.Entry<?, ?> headerEntry : headerMap.entrySet()) {
                     if (headerEntry.getKey() != null && headerEntry.getValue() != null) {
@@ -60,8 +64,8 @@ public class RequestArgumentResolver {
             }
         }
 
-        if (meta.getBodyIndex() >= 0 && args != null && meta.getBodyIndex() < args.length) {
-            body = args[meta.getBodyIndex()];
+        if (plan.bodyIndex() >= 0 && args != null && plan.bodyIndex() < args.length) {
+            body = args[plan.bodyIndex()];
         }
 
         return new ResolvedArgs(pathVars, queryParams, headers, body);

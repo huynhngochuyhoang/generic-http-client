@@ -11,6 +11,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] - 2026-05-18
+
+### Added
+
+- **Lifecycle hook SPI.** Added ordered `ReactiveHttpClientLifecycleHook`
+  callbacks for request start, retry attempts, success, error, and cancellation,
+  with failures isolated from the client call and from other hooks.
+- **Structured error response mapping.** Added ordered `ErrorResponseMapper`
+  support so applications can map per-client structured error bodies to
+  domain-specific exceptions while retaining default decoder fallback.
+- **Test-helper assertions.** Added fluent `RecordedExchange` assertions for
+  method, path, query parameters, headers, body, status, repeated query values,
+  and redacted headers.
+- **Documentation release checks.** Added local doc-link validation, version
+  snippet checks, generated configuration property reference, and CI-style tests
+  to catch documentation drift.
+
+### Changed
+
+- **Request plan model.** Invocation internals now use an immutable request plan
+  built from method metadata so stable annotation-derived request decisions are
+  kept out of the per-call path while dynamic argument resolution remains
+  explicit.
+- **Conflict and precedence coverage.** Documented and tested precedence for
+  annotations, `@ApiRef`, defaults, auth, customizers, resilience, logging, and
+  observability configuration.
+- **Observability guardrails.** High-cardinality Micrometer tags and OTel
+  attributes remain opt-in, with metadata and documentation guidance for risky
+  settings.
+
+### Fixed
+
+- **Ambiguous configuration behavior.** Remaining annotation/configuration
+  conflict cases now either fail fast or have documented precedence.
+- **Mapper fallback safety.** Invalid structured error bodies and mapper misses
+  fall back to default `HttpClientException` / `RemoteServiceException` decoding
+  while preserving status, response body, and `ErrorCategory`.
+
+### Docs
+
+- Added conflict/cardinality guardrails, lifecycle hook, test-helper, and
+  configuration-property reference docs.
+- Updated quick-start and observability docs for conservative observability
+  defaults and extension-point guidance.
+
+---
+
 ## [2.2.0] - 2026-05-17
 
 ### Added
@@ -820,7 +867,8 @@ This project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
 4. Create a GitHub Release from that tag.  
    The `publish-maven-central.yml` workflow will automatically build, sign, and publish the artifacts.
 
-[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/huynhngochuyhoang/reactive-http-client/compare/v1.16.0...v2.0.0

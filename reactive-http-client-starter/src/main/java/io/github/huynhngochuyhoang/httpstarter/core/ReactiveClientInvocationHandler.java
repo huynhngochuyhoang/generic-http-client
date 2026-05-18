@@ -87,6 +87,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     // context initialization (the observer bean may not yet exist when this handler is constructed)
     private final ReactiveHttpClientProperties.ObservabilityConfig observabilityConfig;
     private final org.springframework.beans.factory.ObjectProvider<HttpClientObserver> observerProvider;
+    private final org.springframework.beans.factory.ObjectProvider<ReactiveHttpClientLifecycleHook> lifecycleHookProvider;
 
     public ReactiveClientInvocationHandler(
             WebClient webClient,
@@ -111,6 +112,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 : new NoopResilienceOperatorApplier();
         this.objectMapper = objectMapper;
         this.observerProvider = applicationContext.getBeanProvider(HttpClientObserver.class);
+        this.lifecycleHookProvider = applicationContext.getBeanProvider(ReactiveHttpClientLifecycleHook.class);
         this.observabilityConfig = observabilityConfig;
     }
 
@@ -132,6 +134,29 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             return observers.get(0);
         }
         return new CompositeHttpClientObserver(observers);
+    }
+
+    private List<ReactiveHttpClientLifecycleHook> getLifecycleHooks() {
+        if (lifecycleHookProvider == null) {
+            return List.of();
+        }
+        java.util.stream.Stream<ReactiveHttpClientLifecycleHook> stream = lifecycleHookProvider.orderedStream();
+        if (stream == null) {
+            return List.of();
+        }
+        return stream
+                .filter(hook -> supportsLifecycleHook(hook, clientName))
+                .toList();
+    }
+
+    private boolean supportsLifecycleHook(ReactiveHttpClientLifecycleHook hook, String clientName) {
+        try {
+            return hook.supports(clientName);
+        } catch (Exception e) {
+            log.warn("ReactiveHttpClientLifecycleHook [{}] supports() failed for client [{}] - skipping hook: {}",
+                    hook.getClass().getName(), clientName, e.getMessage());
+            return false;
+        }
     }
 
     public static ExchangeFilterFunction requestUrlObservationFilter() {
@@ -159,7 +184,8 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
 
         MethodMetadata meta = metadataCache.get(method);
-        EffectiveApi effectiveApi = resolveEffectiveApi(method, meta);
+        RequestPlan plan = meta.getRequestPlan();
+        EffectiveApi effectiveApi = resolveEffectiveApi(plan);
 
         if (effectiveApi.httpMethod() == null) {
             throw new UnsupportedOperationException(
@@ -167,7 +193,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
 
         RequestArgumentResolver.ResolvedArgs resolved = applyDefaultHeaders(
-                applyDefaultQueryParams(argumentResolver.resolve(meta, args)));
+                applyDefaultQueryParams(argumentResolver.resolve(plan, args)));
         long requestBytes = measureRequestBodyBytes(resolved.body());
 
         AtomicLong start = new AtomicLong();
@@ -193,10 +219,10 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         WebClient.RequestBodySpec baseRequestSpec = requestSpec;
 
-        long timeoutMs = resolveTimeoutMs(meta, effectiveApi.timeoutMs());
+        long timeoutMs = resolveTimeoutMs(plan, effectiveApi.timeoutMs());
 
-        final MultiValueMap<String, HttpEntity<?>> multipartBody = meta.isMultipart()
-                ? buildMultipartBody(meta, args)
+        final MultiValueMap<String, HttpEntity<?>> multipartBody = plan.multipart()
+                ? buildMultipartBody(plan, args)
                 : null;
 
         // Cache the serialized body so retries reuse the bytes without re-serializing.
@@ -227,7 +253,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     }
                     requestHeadersSpec = requestHeadersSpec.attribute(OBSERVED_REQUEST_URL_ATTRIBUTE, requestUrl);
                     // Apply when: (a) caller set an explicit @TimeoutMs (including 0 to disable), or (b) a resilience timeout resolved to > 0.
-                    boolean shouldApplyResponseTimeout = meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
+                    boolean shouldApplyResponseTimeout = plan.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
                             || effectiveApi.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
                             || timeoutMs > 0;
                     return configureNativeRequest(requestHeadersSpec, timeoutMs, shouldApplyResponseTimeout, requestUrl);
@@ -239,22 +265,25 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
         // Resolve observer once per invocation to avoid repeated volatile reads
         HttpClientObserver observer = getObserver();
+        List<ReactiveHttpClientLifecycleHook> lifecycleHooks = getLifecycleHooks();
 
-        if (meta.isReturnsFlux()) {
+        if (plan.returnsFlux()) {
             Flux<?> flux = exchange(requestHeadersSpecMono, responseStatus, responseHeaders,
-                    response -> buildFlux(response, meta.getResponseType()))
+                    response -> buildFlux(response, plan.responseType()))
                     .doOnSubscribe(subscription -> {
-                attemptCount.incrementAndGet();
+                int attempt = attemptCount.incrementAndGet();
                 start.compareAndSet(0L, System.currentTimeMillis());
                 responseStatus.set(null);
                 responseHeaders.set(Map.of());
                 terminalError.set(null);
+                notifyLifecycleAttempt(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                        responseStatus.get(), terminalError.get(), attempt);
                 if (exchangeLogger == null && firstAttempt.compareAndSet(true, false)) {
                     logRequest(effectiveApi.httpMethod(), effectiveApi.pathTemplate(), start.get());
                 }
                     });
-            flux = applyResilienceFlux(flux, meta, effectiveApi.httpMethod());
-            if (exchangeLogger != null || observer != null) {
+            flux = applyResilienceFlux(flux, plan, effectiveApi.httpMethod());
+            if (exchangeLogger != null || observer != null || !lifecycleHooks.isEmpty()) {
                 AtomicReference<Map<String, List<String>>> inboundHeadersRef = new AtomicReference<>(Map.of());
                 AtomicBoolean reported = new AtomicBoolean(false);
                 Flux<?> capturedFlux = flux;
@@ -264,16 +293,23 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                             : Map.of());
                     return capturedFlux;
                 })
+                .doOnComplete(() -> notifyLifecycleSuccess(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                        responseStatus.get(), attemptCount.get()))
                 .doOnError(terminalError::set)
+                .doOnError(error -> notifyLifecycleError(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                        responseStatus.get(), error, attemptCount.get()))
                 .doOnTerminate(() -> {
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
+                        reportExchange(exchangeLogger, observer, plan, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                                 responseStatus.get(), responseHeaders.get(), null, terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 })
                 .doOnCancel(() -> {
+                    CancellationException cancellation = new CancellationException("Request was cancelled");
+                    notifyLifecycleCancel(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                            responseStatus.get(), cancellation, attemptCount.get());
                     if (reported.compareAndSet(false, true))
-                        reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
-                                responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
+                        reportExchange(exchangeLogger, observer, plan, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
+                                responseStatus.get(), responseHeaders.get(), null, cancellation, inboundHeadersRef.get(), attemptCount.get(), requestBytes);
                 });
             }
             return flux;
@@ -281,21 +317,23 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
 
         AtomicReference<Object> terminalBody = new AtomicReference<>();
         Mono<?> mono = exchange(requestHeadersSpecMono, responseStatus, responseHeaders,
-                response -> buildMono(response, meta.getResponseType()))
+                response -> buildMono(response, plan.responseType()))
                 .next()
                 .doOnSubscribe(subscription -> {
-            attemptCount.incrementAndGet();
+            int attempt = attemptCount.incrementAndGet();
             start.compareAndSet(0L, System.currentTimeMillis());
             responseStatus.set(null);
             responseHeaders.set(Map.of());
             terminalError.set(null);
             terminalBody.set(null);
+            notifyLifecycleAttempt(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                    responseStatus.get(), terminalError.get(), attempt);
             if (exchangeLogger == null && firstAttempt.compareAndSet(true, false)) {
                 logRequest(effectiveApi.httpMethod(), effectiveApi.pathTemplate(), start.get());
             }
                 });
-        mono = applyResilienceMono(mono, meta, effectiveApi.httpMethod());
-        if (exchangeLogger != null || observer != null) {
+        mono = applyResilienceMono(mono, plan, effectiveApi.httpMethod());
+        if (exchangeLogger != null || observer != null || !lifecycleHooks.isEmpty()) {
             AtomicReference<Map<String, List<String>>> inboundHeadersRef = new AtomicReference<>(Map.of());
             AtomicBoolean reported = new AtomicBoolean(false);
             Mono<?> capturedMono = mono;
@@ -305,17 +343,26 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                         : Map.of());
                 return capturedMono;
             })
-            .doOnSuccess(terminalBody::set)
+            .doOnSuccess(body -> {
+                terminalBody.set(body);
+                notifyLifecycleSuccess(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                        responseStatus.get(), attemptCount.get());
+            })
             .doOnError(terminalError::set)
+            .doOnError(error -> notifyLifecycleError(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                    responseStatus.get(), error, attemptCount.get()))
             .doOnTerminate(() -> {
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
+                    reportExchange(exchangeLogger, observer, plan, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
                             responseStatus.get(), responseHeaders.get(), terminalBody.get(), terminalError.get(), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             })
             .doOnCancel(() -> {
+                CancellationException cancellation = new CancellationException("Request was cancelled");
+                notifyLifecycleCancel(lifecycleHooks, plan, effectiveApi, resolved, requestUrl.get(),
+                        responseStatus.get(), cancellation, attemptCount.get());
                 if (reported.compareAndSet(false, true))
-                    reportExchange(exchangeLogger, observer, meta, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
-                            responseStatus.get(), responseHeaders.get(), null, new CancellationException("Request was cancelled"), inboundHeadersRef.get(), attemptCount.get(), requestBytes);
+                    reportExchange(exchangeLogger, observer, plan, effectiveApi.httpMethod(), effectiveApi.pathTemplate(), resolved, requestUrl.get(), start.get(),
+                            responseStatus.get(), responseHeaders.get(), null, cancellation, inboundHeadersRef.get(), attemptCount.get(), requestBytes);
             });
         }
         return mono;
@@ -392,29 +439,29 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return innerArgs.length == 1 && DataBuffer.class.equals(innerArgs[0]);
     }
 
-    private Mono<?> applyResilienceMono(Mono<?> mono, MethodMetadata meta, String httpMethod) {
+    private Mono<?> applyResilienceMono(Mono<?> mono, RequestPlan plan, String httpMethod) {
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return mono;
 
         if (isRetryableMethod(httpMethod)) {
-            mono = applyRetryMono(mono, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
+            mono = applyRetryMono(mono, resolveResilienceInstanceName(plan.retryInstanceName(), resilience.getRetry()));
         }
-        mono = applyRateLimiterMono(mono, resolveResilienceInstanceName(meta.getRateLimiterInstanceName(), resilience.getRateLimiter()));
-        mono = applyCircuitBreakerMono(mono, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
-        mono = applyBulkheadMono(mono, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
+        mono = applyRateLimiterMono(mono, resolveResilienceInstanceName(plan.rateLimiterInstanceName(), resilience.getRateLimiter()));
+        mono = applyCircuitBreakerMono(mono, resolveResilienceInstanceName(plan.circuitBreakerInstanceName(), resilience.getCircuitBreaker()));
+        mono = applyBulkheadMono(mono, resolveResilienceInstanceName(plan.bulkheadInstanceName(), resilience.getBulkhead()));
         return mono;
     }
 
-    private Flux<?> applyResilienceFlux(Flux<?> flux, MethodMetadata meta, String httpMethod) {
+    private Flux<?> applyResilienceFlux(Flux<?> flux, RequestPlan plan, String httpMethod) {
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
         if (resilience == null || !resilience.isEnabled()) return flux;
 
         if (isRetryableMethod(httpMethod)) {
-            flux = applyRetryFlux(flux, resolveResilienceInstanceName(meta.getRetryInstanceName(), resilience.getRetry()));
+            flux = applyRetryFlux(flux, resolveResilienceInstanceName(plan.retryInstanceName(), resilience.getRetry()));
         }
-        flux = applyRateLimiterFlux(flux, resolveResilienceInstanceName(meta.getRateLimiterInstanceName(), resilience.getRateLimiter()));
-        flux = applyCircuitBreakerFlux(flux, resolveResilienceInstanceName(meta.getCircuitBreakerInstanceName(), resilience.getCircuitBreaker()));
-        flux = applyBulkheadFlux(flux, resolveResilienceInstanceName(meta.getBulkheadInstanceName(), resilience.getBulkhead()));
+        flux = applyRateLimiterFlux(flux, resolveResilienceInstanceName(plan.rateLimiterInstanceName(), resilience.getRateLimiter()));
+        flux = applyCircuitBreakerFlux(flux, resolveResilienceInstanceName(plan.circuitBreakerInstanceName(), resilience.getCircuitBreaker()));
+        flux = applyBulkheadFlux(flux, resolveResilienceInstanceName(plan.bulkheadInstanceName(), resilience.getBulkhead()));
         return flux;
     }
 
@@ -428,10 +475,14 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private long resolveTimeoutMs(MethodMetadata meta, long configuredApiTimeoutMs) {
+        return resolveTimeoutMs(meta.getRequestPlan() != null ? meta.getRequestPlan() : RequestPlan.from(meta), configuredApiTimeoutMs);
+    }
+
+    private long resolveTimeoutMs(RequestPlan plan, long configuredApiTimeoutMs) {
         // Method-level override has highest priority.
         // A method annotation value of 0 explicitly disables timeout for that API method.
-        if (meta.getTimeoutMs() != MethodMetadata.TIMEOUT_NOT_SET) {
-            return meta.getTimeoutMs();
+        if (plan.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET) {
+            return plan.timeoutMs();
         }
         // API-map timeout (via @ApiRef) has second priority.
         if (configuredApiTimeoutMs != MethodMetadata.TIMEOUT_NOT_SET) {
@@ -446,15 +497,19 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private EffectiveApi resolveEffectiveApi(Method method, MethodMetadata meta) {
-        if (meta.getApiRefName() == null) {
-            return meta.getStaticEffectiveApi();
+        return resolveEffectiveApi(meta.getRequestPlan() != null ? meta.getRequestPlan() : RequestPlan.from(meta));
+    }
+
+    private EffectiveApi resolveEffectiveApi(RequestPlan plan) {
+        if (plan.apiRefName() == null) {
+            return plan.staticEffectiveApi();
         }
 
         ReactiveHttpClientProperties.ApiConfig apiConfig = clientConfig.getApis() != null
-                ? clientConfig.getApis().get(meta.getApiRefName())
+                ? clientConfig.getApis().get(plan.apiRefName())
                 : null;
-        String configPrefix = ApiRefValidationSupport.configPrefix(clientName, meta.getApiRefName());
-        String apiRefContext = ApiRefValidationSupport.apiRefContext(method, meta.getApiRefName());
+        String configPrefix = ApiRefValidationSupport.configPrefix(clientName, plan.apiRefName());
+        String apiRefContext = ApiRefValidationSupport.apiRefContext(plan.method(), plan.apiRefName());
         ReactiveHttpClientFactoryBean.validateApiRef(apiConfig, configPrefix, apiRefContext);
         long configuredTimeoutMs = apiConfig.getTimeoutMs();
 
@@ -657,6 +712,111 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                 operatorType, instanceName, error.getMessage());
     }
 
+    private void notifyLifecycleAttempt(
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            RequestPlan plan,
+            EffectiveApi effectiveApi,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
+            HttpStatusCode statusCode,
+            Throwable error,
+            int attemptNumber) {
+        if (hooks.isEmpty()) {
+            return;
+        }
+        ReactiveHttpClientLifecycleContext context = lifecycleContext(
+                plan, effectiveApi, resolved, requestUrl, statusCode, error, attemptNumber);
+        if (attemptNumber <= 1) {
+            invokeLifecycleHooks(hooks, "onStart", hook -> hook.onStart(context));
+        } else {
+            invokeLifecycleHooks(hooks, "onRetryAttempt", hook -> hook.onRetryAttempt(context));
+        }
+    }
+
+    private void notifyLifecycleSuccess(
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            RequestPlan plan,
+            EffectiveApi effectiveApi,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
+            HttpStatusCode statusCode,
+            int attemptNumber) {
+        if (hooks.isEmpty()) {
+            return;
+        }
+        ReactiveHttpClientLifecycleContext context = lifecycleContext(
+                plan, effectiveApi, resolved, requestUrl, statusCode, null, attemptNumber);
+        invokeLifecycleHooks(hooks, "onSuccess", hook -> hook.onSuccess(context));
+    }
+
+    private void notifyLifecycleError(
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            RequestPlan plan,
+            EffectiveApi effectiveApi,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
+            HttpStatusCode statusCode,
+            Throwable error,
+            int attemptNumber) {
+        if (hooks.isEmpty()) {
+            return;
+        }
+        ReactiveHttpClientLifecycleContext context = lifecycleContext(
+                plan, effectiveApi, resolved, requestUrl, statusCode, error, attemptNumber);
+        invokeLifecycleHooks(hooks, "onError", hook -> hook.onError(context));
+    }
+
+    private void notifyLifecycleCancel(
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            RequestPlan plan,
+            EffectiveApi effectiveApi,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
+            HttpStatusCode statusCode,
+            Throwable error,
+            int attemptNumber) {
+        if (hooks.isEmpty()) {
+            return;
+        }
+        ReactiveHttpClientLifecycleContext context = lifecycleContext(
+                plan, effectiveApi, resolved, requestUrl, statusCode, error, attemptNumber);
+        invokeLifecycleHooks(hooks, "onCancel", hook -> hook.onCancel(context));
+    }
+
+    private ReactiveHttpClientLifecycleContext lifecycleContext(
+            RequestPlan plan,
+            EffectiveApi effectiveApi,
+            RequestArgumentResolver.ResolvedArgs resolved,
+            URI requestUrl,
+            HttpStatusCode statusCode,
+            Throwable error,
+            int attemptNumber) {
+        return ReactiveHttpClientLifecycleContext.from(
+                clientName,
+                plan,
+                effectiveApi.httpMethod(),
+                effectiveApi.pathTemplate(),
+                resolved,
+                requestUrl,
+                statusCode != null ? statusCode.value() : null,
+                error,
+                attemptNumber);
+    }
+
+    private void invokeLifecycleHooks(
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            String callbackName,
+            java.util.function.Consumer<ReactiveHttpClientLifecycleHook> callback) {
+        for (ReactiveHttpClientLifecycleHook hook : hooks) {
+            try {
+                callback.accept(hook);
+            } catch (Exception e) {
+                log.warn("ReactiveHttpClientLifecycleHook [{}] {} failed for client [{}] - ignoring: {}",
+                        hook.getClass().getName(), callbackName, clientName, e.getMessage());
+            }
+        }
+    }
+
     private void logRequest(String httpMethod, String pathTemplate, long startMs) {
         if (log.isDebugEnabled()) {
             log.debug("[{}] {} {} (resolved in {}ms)",
@@ -738,7 +898,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     private void reportExchange(
             HttpExchangeLogger exchangeLogger,
             HttpClientObserver observer,
-            MethodMetadata meta,
+            RequestPlan plan,
             String httpMethod,
             String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
@@ -756,7 +916,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         if (observer != null) {
             long responseBytes = extractContentLengthBytes(responseHeaders);
-            notifyObserver(observer, meta, httpMethod, pathTemplate, resolved, requestUrl, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
+            notifyObserver(observer, plan, httpMethod, pathTemplate, resolved, requestUrl, startMs, statusCode, error, responseBody, attemptCount, requestBytes, responseBytes);
         }
     }
 
@@ -808,7 +968,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      */
     private void notifyObserver(
             HttpClientObserver observer,
-            MethodMetadata meta,
+            RequestPlan plan,
             String httpMethod,
             String pathTemplate,
             RequestArgumentResolver.ResolvedArgs resolved,
@@ -825,7 +985,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             boolean logRespBody = observabilityConfig != null && observabilityConfig.isLogResponseBody();
             observer.record(new HttpClientObserverEvent(
                     clientName,
-                    meta.getApiName(),
+                    plan.apiName(),
                     httpMethod,
                     pathTemplate,
                     statusCode != null ? statusCode.value() : null,
@@ -867,10 +1027,12 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
      * {@code @FormFile} parameter values. Unsupported value types fail fast with a
      * descriptive {@link IllegalArgumentException}; null values skip the part.
      */
-    private static MultiValueMap<String, HttpEntity<?>> buildMultipartBody(MethodMetadata meta, Object[] args) {
+    private static MultiValueMap<String, HttpEntity<?>> buildMultipartBody(RequestPlan plan, Object[] args) {
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
 
-        meta.getFormFieldParams().forEach((idx, name) -> {
+        plan.formFields().forEach(binding -> {
+            int idx = binding.argumentIndex();
+            String name = binding.name();
             if (args == null || idx >= args.length) return;
             Object value = args[idx];
             if (value == null) return;
@@ -889,7 +1051,9 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
             }
         });
 
-        meta.getFormFileParams().forEach((idx, annotation) -> {
+        plan.formFiles().forEach(binding -> {
+            int idx = binding.argumentIndex();
+            FormFile annotation = binding.annotation();
             if (args == null || idx >= args.length) return;
             Object value = args[idx];
             if (value == null) return;

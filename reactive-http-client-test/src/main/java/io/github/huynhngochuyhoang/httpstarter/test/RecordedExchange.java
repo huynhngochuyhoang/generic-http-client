@@ -1,6 +1,7 @@
 package io.github.huynhngochuyhoang.httpstarter.test;
 
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.client.reactive.MockClientHttpRequest;
 import reactor.core.publisher.Flux;
@@ -23,12 +24,18 @@ public final class RecordedExchange {
     private final HttpMethod method;
     private final URI uri;
     private final MockClientHttpRequest materialized;
+    private final HttpStatusCode statusCode;
     private final String bodyAsString;
 
     RecordedExchange(HttpMethod method, URI uri, MockClientHttpRequest materialized) {
+        this(method, uri, materialized, null);
+    }
+
+    RecordedExchange(HttpMethod method, URI uri, MockClientHttpRequest materialized, HttpStatusCode statusCode) {
         this.method = method;
         this.uri = uri;
         this.materialized = materialized;
+        this.statusCode = statusCode;
         this.bodyAsString = readBodyAsString(materialized);
     }
 
@@ -44,6 +51,17 @@ public final class RecordedExchange {
     /** Returns the first value of {@code headerName}, or {@code null} if absent. */
     public String header(String headerName) { return materialized.getHeaders().getFirst(headerName); }
 
+    /** HTTP status selected by the mock response handler. */
+    public HttpStatusCode statusCode() {
+        if (statusCode == null) {
+            throw new IllegalStateException("No response status has been selected for this exchange yet.");
+        }
+        return statusCode;
+    }
+
+    /** Numeric HTTP status selected by the mock response handler. */
+    public int statusCodeValue() { return statusCode().value(); }
+
     /** UTF-8 decoded request body. Empty string if no body was written. */
     public String bodyAsString() { return bodyAsString; }
 
@@ -58,6 +76,7 @@ public final class RecordedExchange {
 
     @Override
     public String toString() {
-        return "RecordedExchange{" + method + " " + uri + ", contentType=" + contentType() + "}";
+        return "RecordedExchange{" + method + " " + uri + ", status="
+                + (statusCode == null ? "<pending>" : statusCode) + ", contentType=" + contentType() + "}";
     }
 }

@@ -183,17 +183,24 @@ public final class MockReactiveHttpClient<T> {
                         request.method(), URI.create(request.url().toString()));
                 return request.writeTo(materialized, ExchangeStrategies.withDefaults())
                         .then(Mono.fromCallable(() -> {
-                            RecordedExchange exchange = new RecordedExchange(
+                            RecordedExchange requestExchange = new RecordedExchange(
                                     request.method(),
                                     URI.create(request.url().toString()),
                                     materialized);
-                            exchanges.add(exchange);
+                            exchanges.add(requestExchange);
+                            ClientResponse response = fallbackRef.get();
                             for (Matcher matcher : liveMatchers) {
-                                if (matcher.predicate.test(exchange)) {
-                                    return matcher.handler.apply(exchange);
+                                if (matcher.predicate.test(requestExchange)) {
+                                    response = matcher.handler.apply(requestExchange);
+                                    break;
                                 }
                             }
-                            return fallbackRef.get();
+                            exchanges.set(exchanges.indexOf(requestExchange), new RecordedExchange(
+                                    request.method(),
+                                    URI.create(request.url().toString()),
+                                    materialized,
+                                    response.statusCode()));
+                            return response;
                         }));
             };
 

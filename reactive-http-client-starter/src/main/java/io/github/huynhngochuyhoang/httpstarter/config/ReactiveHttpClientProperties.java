@@ -617,7 +617,7 @@ public class ReactiveHttpClientProperties {
      *     observability:
      *       enabled: true
      *       metric-name: reactive.http.client.requests
-     *       include-url-path: true
+     *       include-url-path: false
      *       log-request-body: false
      * }</pre>
      */
@@ -630,10 +630,10 @@ public class ReactiveHttpClientProperties {
         private String metricName = "reactive.http.client.requests";
 
         /**
-         * Include the raw URL path as a tag.
-         * Disable for high-cardinality path templates with many distinct IDs.
+         * Include the URL path template as a metric tag and span attribute.
+         * Opt in only when path templates are bounded and do not contain raw IDs.
          */
-        private boolean includeUrlPath = true;
+        private boolean includeUrlPath = false;
 
         /**
          * Include resolved outbound server.address / server.port as Micrometer tags.
