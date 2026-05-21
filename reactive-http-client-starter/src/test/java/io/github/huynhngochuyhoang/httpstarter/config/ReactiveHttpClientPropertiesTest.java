@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -286,9 +287,87 @@ class ReactiveHttpClientPropertiesTest {
         assertThrows(IllegalArgumentException.class, () -> apiConfig.setTimeoutMs(30L * 60 * 1000 + 1));
     }
 
+    @Test
+    void invalidNetworkTimeoutsIncludePropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.NetworkConfig network = new ReactiveHttpClientProperties.NetworkConfig();
+
+        assertInvalidConfig(() -> network.setConnectTimeoutMs(0),
+                "reactive.http.network.connect-timeout-ms", ">= 1");
+        assertInvalidConfig(() -> network.setNetworkReadTimeoutMs(0),
+                "reactive.http.network.network-read-timeout-ms", ">= 1");
+        assertInvalidConfig(() -> network.setNetworkWriteTimeoutMs(-1),
+                "reactive.http.network.network-write-timeout-ms", ">= 1");
+    }
+
+    @Test
+    void invalidConnectionPoolBoundsIncludePropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.ConnectionPoolConfig pool = new ReactiveHttpClientProperties.ConnectionPoolConfig();
+
+        assertInvalidConfig(() -> pool.setMaxConnections(0),
+                "reactive.http.network.connection-pool.max-connections", ">= 1");
+        assertInvalidConfig(() -> pool.setPendingAcquireTimeoutMs(-1),
+                "reactive.http.network.connection-pool.pending-acquire-timeout-ms", ">= 0");
+        assertInvalidConfig(() -> pool.setMaxIdleTimeMs(-1),
+                "reactive.http.network.connection-pool.max-idle-time-ms", ">= 0");
+        assertInvalidConfig(() -> pool.setMaxLifeTimeMs(-1),
+                "reactive.http.network.connection-pool.max-life-time-ms", ">= 0");
+        assertInvalidConfig(() -> pool.setEvictInBackgroundMs(-1),
+                "reactive.http.network.connection-pool.evict-in-background-ms", ">= 0");
+    }
+
+    @Test
+    void invalidCodecLimitIncludesPropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+
+        assertInvalidConfig(() -> config.setCodecMaxInMemorySizeMb(-1),
+                "reactive.http.clients.*.codec-max-in-memory-size-mb", ">= 0");
+    }
+
+    @Test
+    void invalidResilienceTimeoutIncludesPropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.ResilienceConfig resilience = new ReactiveHttpClientProperties.ResilienceConfig();
+
+        assertInvalidConfig(() -> resilience.setTimeoutMs(-1),
+                "reactive.http.clients.*.resilience.timeout-ms", ">= 0");
+        assertInvalidConfig(() -> resilience.setTimeoutMs(30L * 60 * 1000 + 1),
+                "reactive.http.clients.*.resilience.timeout-ms", "<= 1800000");
+    }
+
+    @Test
+    void invalidHistogramBoundariesIncludePropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.HistogramConfig histogram = new ReactiveHttpClientProperties.HistogramConfig();
+
+        assertInvalidConfig(() -> histogram.setSloBoundariesMs(List.of()),
+                "reactive.http.observability.histogram.slo-boundaries-ms", "must not be empty");
+        assertInvalidConfig(() -> histogram.setSloBoundariesMs(List.of(50L, 0L)),
+                "reactive.http.observability.histogram.slo-boundaries-ms", ">= 1");
+        assertInvalidConfig(() -> histogram.setSloBoundariesMs(List.of(50L, 50L)),
+                "reactive.http.observability.histogram.slo-boundaries-ms", "strictly increasing");
+    }
+
+    @Test
+    void invalidHealthBoundsIncludePropertyNameAndAcceptedRange() {
+        ReactiveHttpClientProperties.HealthConfig health = new ReactiveHttpClientProperties.HealthConfig();
+
+        assertInvalidConfig(() -> health.setErrorRateThreshold(-0.1),
+                "reactive.http.observability.health.error-rate-threshold", "between 0.0 and 1.0");
+        assertInvalidConfig(() -> health.setErrorRateThreshold(Double.NaN),
+                "reactive.http.observability.health.error-rate-threshold", "between 0.0 and 1.0");
+        assertInvalidConfig(() -> health.setMinSamples(0),
+                "reactive.http.observability.health.min-samples", ">= 1");
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private static void assertInvalidConfig(Runnable action, String propertyName, String acceptedRange) {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, action::run);
+        assertTrue(ex.getMessage().contains(propertyName),
+                "Error should include property name: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains(acceptedRange),
+                "Error should include accepted range: " + ex.getMessage());
+    }
 
     private static ReactiveHttpClientProperties bind(Map<String, Object> yaml) {
         ConfigurationPropertySource source = new MapConfigurationPropertySource(yaml);

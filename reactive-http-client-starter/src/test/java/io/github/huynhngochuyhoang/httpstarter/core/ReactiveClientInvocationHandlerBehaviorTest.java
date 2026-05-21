@@ -18,6 +18,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.lang.reflect.Proxy;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +140,79 @@ class ReactiveClientInvocationHandlerBehaviorTest {
         assertEquals("vi-VN", queryParams.getFirst("locale"));
         assertEquals(List.of("runtime", "sale"), queryParams.get("tag"));
         assertFalse(queryParams.get("tag").contains("public"));
+    }
+
+    @Test
+    void shouldEncodePathVariablesAsRawValues() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveClientInvocationHandler handler = createHandler(webClient);
+
+        StepVerifier.create(invokeFile(handler, "reports/2026 Q1+draft"))
+                .expectNext("ok")
+                .verifyComplete();
+
+        assertEquals("/files/reports%2F2026%20Q1%2Bdraft", captured.get().url().getRawPath());
+    }
+
+    @Test
+    void shouldEncodeQueryParamValuesAndKeepEmptyValues() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveClientInvocationHandler handler = createHandler(webClient);
+
+        StepVerifier.create(invokeComplexSearch(handler, "a b&c=1", List.of("red/blue", "x y"), ""))
+                .expectNext("ok")
+                .verifyComplete();
+
+        URI uri = captured.get().url();
+        assertTrue(uri.getRawQuery().contains("q=a%20b%26c%3D1"));
+        assertTrue(uri.getRawQuery().contains("tag=red/blue"));
+        assertTrue(uri.getRawQuery().contains("tag=x%20y"));
+        assertTrue(uri.getRawQuery().contains("empty="));
+    }
+
+    @Test
+    void shouldPreserveTemplateQueryStringAndAppendConfiguredAndMethodQueryParams() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        config.setDefaultQueryParams(Map.of(
+                "locale", List.of("en-US"),
+                "tag", List.of("default")));
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+
+        StepVerifier.create(invokeTemplateQuerySearch(handler, "1", "runtime"))
+                .expectNext("ok")
+                .verifyComplete();
+
+        var queryParams = UriComponentsBuilder.fromUri(captured.get().url()).build().getQueryParams();
+        assertEquals("yes", queryParams.getFirst("fixed"));
+        assertEquals("true", queryParams.getFirst("fromTemplate"));
+        assertEquals("en-US", queryParams.getFirst("locale"));
+        assertEquals("1", queryParams.getFirst("page"));
+        assertEquals(List.of("from-template", "runtime"), queryParams.get("tag"));
+    }
+
+    @Test
+    void shouldApplyApiRefPathTemplateWithQueryString() {
+        AtomicReference<ClientRequest> captured = new AtomicReference<>();
+        WebClient webClient = captureRequestWebClient(captured);
+        ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
+        ReactiveHttpClientProperties.ApiConfig api = new ReactiveHttpClientProperties.ApiConfig();
+        api.setMethod("GET");
+        api.setPath("/users/{id}?expand=profile details");
+        config.setApis(Map.of("lookup", api));
+        ReactiveClientInvocationHandler handler = createHandler(webClient, config);
+
+        StepVerifier.create(invokeApiRefLookup(handler, "a/b", "vi-VN"))
+                .expectNext("ok")
+                .verifyComplete();
+
+        URI uri = captured.get().url();
+        assertEquals("/users/a%2Fb", uri.getRawPath());
+        assertTrue(uri.getRawQuery().contains("expand=profile%20details"));
+        assertTrue(uri.getRawQuery().contains("lang=vi-VN"));
     }
 
     @Test
@@ -358,6 +432,48 @@ class ReactiveClientInvocationHandlerBehaviorTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private static Mono<String> invokeFile(ReactiveClientInvocationHandler handler, String key) {
+        try {
+            var method = ClientWithPathVar.class.getMethod("file", String.class);
+            return (Mono<String>) handler.invoke(null, method, new Object[]{key});
+        } catch (Throwable t) {
+            return Mono.error(t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Mono<String> invokeComplexSearch(
+            ReactiveClientInvocationHandler handler, String query, List<String> tags, String empty) {
+        try {
+            var method = ClientWithComplexQueryParams.class.getMethod("search", String.class, List.class, String.class);
+            return (Mono<String>) handler.invoke(null, method, new Object[]{query, tags, empty});
+        } catch (Throwable t) {
+            return Mono.error(t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Mono<String> invokeTemplateQuerySearch(
+            ReactiveClientInvocationHandler handler, String page, String tag) {
+        try {
+            var method = ClientWithTemplateQueryParams.class.getMethod("search", String.class, String.class);
+            return (Mono<String>) handler.invoke(null, method, new Object[]{page, tag});
+        } catch (Throwable t) {
+            return Mono.error(t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Mono<String> invokeApiRefLookup(ReactiveClientInvocationHandler handler, String id, String lang) {
+        try {
+            var method = ClientWithApiRefPathQuery.class.getMethod("lookup", String.class, String.class);
+            return (Mono<String>) handler.invoke(null, method, new Object[]{id, lang});
+        } catch (Throwable t) {
+            return Mono.error(t);
+        }
+    }
+
     private static WebClient captureRequestWebClient(AtomicReference<ClientRequest> captured) {
         return WebClient.builder()
                 .baseUrl("http://test.local")
@@ -439,6 +555,29 @@ class ReactiveClientInvocationHandlerBehaviorTest {
     interface ClientWithQueryParams {
         @GET("/search")
         Mono<String> search(@QueryParam("locale") String locale, @QueryParam("tag") List<String> tags);
+    }
+
+    interface ClientWithPathVar {
+        @GET("/files/{key}")
+        Mono<String> file(@PathVar("key") String key);
+    }
+
+    interface ClientWithComplexQueryParams {
+        @GET("/search")
+        Mono<String> search(
+                @QueryParam("q") String query,
+                @QueryParam("tag") List<String> tags,
+                @QueryParam("empty") String empty);
+    }
+
+    interface ClientWithTemplateQueryParams {
+        @GET("/search?fixed=yes&tag=from-template&fromTemplate=true")
+        Mono<String> search(@QueryParam("page") String page, @QueryParam("tag") String tag);
+    }
+
+    interface ClientWithApiRefPathQuery {
+        @ApiRef("lookup")
+        Mono<String> lookup(@PathVar("id") String id, @QueryParam("lang") String lang);
     }
 
     interface ClientWithDefaultMethod {

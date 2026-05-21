@@ -9,3 +9,5 @@ Planning documents for the project:
 - [ROADMAP_V3_CHECKLIST.md](ROADMAP_V3_CHECKLIST.md) — V3 execution checklist
 - [ROADMAP_V4.md](ROADMAP_V4.md) — V4 roadmap
 - [ROADMAP_V4_CHECKLIST.md](ROADMAP_V4_CHECKLIST.md) — V4 execution checklist
+- [ROADMAP_V5.md](ROADMAP_V5.md) — V5 roadmap
+- [ROADMAP_V5_CHECKLIST.md](ROADMAP_V5_CHECKLIST.md) — V5 execution checklist

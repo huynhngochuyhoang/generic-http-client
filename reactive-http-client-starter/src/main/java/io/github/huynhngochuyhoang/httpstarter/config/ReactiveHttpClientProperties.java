@@ -60,6 +60,27 @@ public class ReactiveHttpClientProperties {
         this.inboundHeaders = inboundHeaders != null ? inboundHeaders : new InboundHeadersConfig();
     }
 
+    private static int requireAtLeast(String propertyName, int value, int min) {
+        if (value < min) {
+            throw new IllegalArgumentException(propertyName + " must be >= " + min + " but was " + value + ".");
+        }
+        return value;
+    }
+
+    private static long requireAtLeast(String propertyName, long value, long min) {
+        if (value < min) {
+            throw new IllegalArgumentException(propertyName + " must be >= " + min + " but was " + value + ".");
+        }
+        return value;
+    }
+
+    private static long requireAtMost(String propertyName, long value, long max) {
+        if (value > max) {
+            throw new IllegalArgumentException(propertyName + " must be <= " + max + " but was " + value + ".");
+        }
+        return value;
+    }
+
     // ---- global network configuration ----
 
     /**
@@ -104,21 +125,27 @@ public class ReactiveHttpClientProperties {
         private TlsConfig tls;
 
         public int getConnectTimeoutMs() { return connectTimeoutMs; }
-        public void setConnectTimeoutMs(int connectTimeoutMs) { this.connectTimeoutMs = connectTimeoutMs; }
+        public void setConnectTimeoutMs(int connectTimeoutMs) {
+            this.connectTimeoutMs = requireAtLeast("reactive.http.network.connect-timeout-ms", connectTimeoutMs, 1);
+        }
 
         /**
          * Canonical name for the Netty {@code ReadTimeoutHandler} safety-net timeout.
          * Fires when a pooled connection produces no inbound bytes for this duration.
          */
         public int getNetworkReadTimeoutMs() { return networkReadTimeoutMs; }
-        public void setNetworkReadTimeoutMs(int networkReadTimeoutMs) { this.networkReadTimeoutMs = networkReadTimeoutMs; }
+        public void setNetworkReadTimeoutMs(int networkReadTimeoutMs) {
+            this.networkReadTimeoutMs = requireAtLeast("reactive.http.network.network-read-timeout-ms", networkReadTimeoutMs, 1);
+        }
 
         /**
          * Canonical name for the Netty {@code WriteTimeoutHandler} safety-net timeout.
          * Fires when a pooled connection accepts no outbound bytes for this duration.
          */
         public int getNetworkWriteTimeoutMs() { return networkWriteTimeoutMs; }
-        public void setNetworkWriteTimeoutMs(int networkWriteTimeoutMs) { this.networkWriteTimeoutMs = networkWriteTimeoutMs; }
+        public void setNetworkWriteTimeoutMs(int networkWriteTimeoutMs) {
+            this.networkWriteTimeoutMs = requireAtLeast("reactive.http.network.network-write-timeout-ms", networkWriteTimeoutMs, 1);
+        }
 
         /**
          * @deprecated use {@link #getNetworkReadTimeoutMs()} / {@code network-read-timeout-ms}.
@@ -130,7 +157,9 @@ public class ReactiveHttpClientProperties {
 
         /** @deprecated setter retained so {@code read-timeout-ms} continues to bind. */
         @Deprecated
-        public void setReadTimeoutMs(int readTimeoutMs) { this.networkReadTimeoutMs = readTimeoutMs; }
+        public void setReadTimeoutMs(int readTimeoutMs) {
+            this.networkReadTimeoutMs = requireAtLeast("reactive.http.network.read-timeout-ms", readTimeoutMs, 1);
+        }
 
         /**
          * @deprecated use {@link #getNetworkWriteTimeoutMs()} / {@code network-write-timeout-ms}.
@@ -142,7 +171,9 @@ public class ReactiveHttpClientProperties {
 
         /** @deprecated setter retained so {@code write-timeout-ms} continues to bind. */
         @Deprecated
-        public void setWriteTimeoutMs(int writeTimeoutMs) { this.networkWriteTimeoutMs = writeTimeoutMs; }
+        public void setWriteTimeoutMs(int writeTimeoutMs) {
+            this.networkWriteTimeoutMs = requireAtLeast("reactive.http.network.write-timeout-ms", writeTimeoutMs, 1);
+        }
 
         public ConnectionPoolConfig getConnectionPool() { return connectionPool; }
         public void setConnectionPool(ConnectionPoolConfig connectionPool) { this.connectionPool = connectionPool; }
@@ -173,21 +204,29 @@ public class ReactiveHttpClientProperties {
         private boolean metricsEnabled = false;
 
         public int getMaxConnections() { return maxConnections; }
-        public void setMaxConnections(int maxConnections) { this.maxConnections = maxConnections; }
+        public void setMaxConnections(int maxConnections) {
+            this.maxConnections = requireAtLeast("reactive.http.network.connection-pool.max-connections", maxConnections, 1);
+        }
 
         public long getPendingAcquireTimeoutMs() { return pendingAcquireTimeoutMs; }
         public void setPendingAcquireTimeoutMs(long pendingAcquireTimeoutMs) {
-            this.pendingAcquireTimeoutMs = pendingAcquireTimeoutMs;
+            this.pendingAcquireTimeoutMs = requireAtLeast("reactive.http.network.connection-pool.pending-acquire-timeout-ms", pendingAcquireTimeoutMs, 0);
         }
 
         public long getMaxIdleTimeMs() { return maxIdleTimeMs; }
-        public void setMaxIdleTimeMs(long maxIdleTimeMs) { this.maxIdleTimeMs = maxIdleTimeMs; }
+        public void setMaxIdleTimeMs(long maxIdleTimeMs) {
+            this.maxIdleTimeMs = requireAtLeast("reactive.http.network.connection-pool.max-idle-time-ms", maxIdleTimeMs, 0);
+        }
 
         public long getMaxLifeTimeMs() { return maxLifeTimeMs; }
-        public void setMaxLifeTimeMs(long maxLifeTimeMs) { this.maxLifeTimeMs = maxLifeTimeMs; }
+        public void setMaxLifeTimeMs(long maxLifeTimeMs) {
+            this.maxLifeTimeMs = requireAtLeast("reactive.http.network.connection-pool.max-life-time-ms", maxLifeTimeMs, 0);
+        }
 
         public long getEvictInBackgroundMs() { return evictInBackgroundMs; }
-        public void setEvictInBackgroundMs(long evictInBackgroundMs) { this.evictInBackgroundMs = evictInBackgroundMs; }
+        public void setEvictInBackgroundMs(long evictInBackgroundMs) {
+            this.evictInBackgroundMs = requireAtLeast("reactive.http.network.connection-pool.evict-in-background-ms", evictInBackgroundMs, 0);
+        }
 
         public boolean isMetricsEnabled() { return metricsEnabled; }
         public void setMetricsEnabled(boolean metricsEnabled) { this.metricsEnabled = metricsEnabled; }
@@ -322,6 +361,8 @@ public class ReactiveHttpClientProperties {
 
     public static class ClientConfig {
 
+        private static final int MAX_CODEC_MAX_IN_MEMORY_SIZE_MB = Integer.MAX_VALUE / (1024 * 1024);
+
         private String baseUrl;
         private int codecMaxInMemorySizeMb = 2;
         private boolean compressionEnabled = false;
@@ -377,7 +418,11 @@ public class ReactiveHttpClientProperties {
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
 
         public int getCodecMaxInMemorySizeMb() { return codecMaxInMemorySizeMb; }
-        public void setCodecMaxInMemorySizeMb(int codecMaxInMemorySizeMb) { this.codecMaxInMemorySizeMb = codecMaxInMemorySizeMb; }
+        public void setCodecMaxInMemorySizeMb(int codecMaxInMemorySizeMb) {
+            requireAtLeast("reactive.http.clients.*.codec-max-in-memory-size-mb", codecMaxInMemorySizeMb, 0);
+            requireAtMost("reactive.http.clients.*.codec-max-in-memory-size-mb", codecMaxInMemorySizeMb, MAX_CODEC_MAX_IN_MEMORY_SIZE_MB);
+            this.codecMaxInMemorySizeMb = codecMaxInMemorySizeMb;
+        }
 
         public boolean isCompressionEnabled() { return compressionEnabled; }
         public void setCompressionEnabled(boolean compressionEnabled) { this.compressionEnabled = compressionEnabled; }
@@ -553,6 +598,8 @@ public class ReactiveHttpClientProperties {
 
     public static class ResilienceConfig {
 
+        private static final long MAX_TIMEOUT_MS = 30L * 60 * 1000;
+
         private boolean enabled = false;
         /** Name of the Resilience4j CircuitBreaker instance (from application config). */
         private String circuitBreaker = "default";
@@ -602,7 +649,11 @@ public class ReactiveHttpClientProperties {
         public void setRateLimiter(String rateLimiter) { this.rateLimiter = rateLimiter; }
 
         public long getTimeoutMs() { return timeoutMs; }
-        public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
+        public void setTimeoutMs(long timeoutMs) {
+            requireAtLeast("reactive.http.clients.*.resilience.timeout-ms", timeoutMs, 0);
+            requireAtMost("reactive.http.clients.*.resilience.timeout-ms", timeoutMs, MAX_TIMEOUT_MS);
+            this.timeoutMs = timeoutMs;
+        }
     }
 
     // ---- observability / metrics sub-config ----
@@ -717,8 +768,27 @@ public class ReactiveHttpClientProperties {
 
         public List<Long> getSloBoundariesMs() { return sloBoundariesMs; }
         public void setSloBoundariesMs(List<Long> sloBoundariesMs) {
-            this.sloBoundariesMs = sloBoundariesMs != null ? sloBoundariesMs
-                    : new ArrayList<>(DEFAULT_SLO_BOUNDARIES_MS);
+            if (sloBoundariesMs == null) {
+                this.sloBoundariesMs = new ArrayList<>(DEFAULT_SLO_BOUNDARIES_MS);
+                return;
+            }
+            if (sloBoundariesMs.isEmpty()) {
+                throw new IllegalArgumentException("reactive.http.observability.histogram.slo-boundaries-ms must not be empty.");
+            }
+            ArrayList<Long> validated = new ArrayList<>(sloBoundariesMs.size());
+            long previous = 0;
+            for (Long boundary : sloBoundariesMs) {
+                if (boundary == null) {
+                    throw new IllegalArgumentException("reactive.http.observability.histogram.slo-boundaries-ms must not contain null values.");
+                }
+                requireAtLeast("reactive.http.observability.histogram.slo-boundaries-ms", boundary, 1);
+                if (!validated.isEmpty() && boundary <= previous) {
+                    throw new IllegalArgumentException("reactive.http.observability.histogram.slo-boundaries-ms must be strictly increasing.");
+                }
+                validated.add(boundary);
+                previous = boundary;
+            }
+            this.sloBoundariesMs = validated;
         }
     }
 
@@ -765,10 +835,17 @@ public class ReactiveHttpClientProperties {
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
         public double getErrorRateThreshold() { return errorRateThreshold; }
-        public void setErrorRateThreshold(double errorRateThreshold) { this.errorRateThreshold = errorRateThreshold; }
+        public void setErrorRateThreshold(double errorRateThreshold) {
+            if (!Double.isFinite(errorRateThreshold) || errorRateThreshold < 0.0 || errorRateThreshold > 1.0) {
+                throw new IllegalArgumentException("reactive.http.observability.health.error-rate-threshold must be between 0.0 and 1.0 but was " + errorRateThreshold + ".");
+            }
+            this.errorRateThreshold = errorRateThreshold;
+        }
 
         public long getMinSamples() { return minSamples; }
-        public void setMinSamples(long minSamples) { this.minSamples = minSamples; }
+        public void setMinSamples(long minSamples) {
+            this.minSamples = requireAtLeast("reactive.http.observability.health.min-samples", minSamples, 1);
+        }
     }
 
     // ---- global observability config (not per-client) ----

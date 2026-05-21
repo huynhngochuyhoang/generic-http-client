@@ -78,6 +78,26 @@ Mono<List<User>> listUsers(
         @QueryParam("role") String role);   // omitted when null
 ```
 
+### URI encoding contract
+
+Pass raw, unencoded values to `@PathVar` and `@QueryParam`. The starter delegates
+URI construction to Spring's `UriBuilder`, which percent-encodes path variables
+and query parameter values when the request URI is built.
+
+Examples:
+
+- `@PathVar("key")` value `reports/2026 Q1+draft` is sent as
+  `/reports%2F2026%20Q1%2Bdraft`; the slash remains part of the variable, not a
+  path separator.
+- `@QueryParam("q")` value `a b&c=1` is sent as `q=a%20b%26c%3D1`.
+- Empty query values are retained as `name=`. `null` query values are omitted.
+- Collection or array query values are sent as repeated parameters.
+
+Do not pass pre-encoded values such as `a%2Fb`; the percent sign is treated as a
+literal character and encoded again. Literal query strings in annotation paths
+or `@ApiRef` paths are preserved and method/default query parameters are
+appended after them.
+
 ### `@HeaderParam`
 
 Adds a static or dynamic request header. Accepts a plain value or a `Map<String, String>` for multiple headers at once.
