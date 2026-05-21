@@ -55,6 +55,31 @@ Mono<OrderItem> getItem(
 
 ---
 
+## Response envelopes
+
+Use `Mono<ResponseEntity<T>>` when application code needs the upstream status or
+headers together with a decoded body:
+
+```java
+@POST("/orders")
+Mono<ResponseEntity<OrderReceipt>> createOrder(@Body NewOrder request);
+```
+
+Use `Mono<ResponseEntity<Void>>` for endpoints where the response metadata is
+important but no body is expected:
+
+```java
+@DELETE("/orders/{id}")
+Mono<ResponseEntity<Void>> deleteOrder(@PathVar("id") long id);
+```
+
+Non-2xx responses are still decoded through the configured `DefaultErrorDecoder`
+and any registered `ErrorResponseMapper` beans before a `ResponseEntity` is
+emitted. For large streaming bodies, use `Mono<ResponseEntity<Flux<DataBuffer>>>`
+as documented in [11-streaming.md](11-streaming.md).
+
+---
+
 ## Parameter annotations
 
 ### `@PathVar`

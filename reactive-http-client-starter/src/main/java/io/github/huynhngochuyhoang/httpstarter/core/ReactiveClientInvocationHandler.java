@@ -414,6 +414,34 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
     }
 
     private Mono<?> buildMono(ClientResponse response, Type responseType) {
+        // Streaming passthrough for Mono<ResponseEntity<Flux<DataBuffer>>>: skip the
+        // in-memory codec entirely so large payloads aren't bound by codec-max-in-memory-size.
+        if (isResponseEntityOfFluxDataBuffer(responseType)) {
+            Flux<DataBuffer> streaming = response.bodyToFlux(DataBuffer.class);
+            return Mono.just(ResponseEntity.status(response.statusCode())
+                    .headers(response.headers().asHttpHeaders())
+                    .body(streaming));
+        }
+
+        Type responseEntityBodyType = responseEntityBodyType(responseType);
+        if (responseEntityBodyType != null) {
+            return buildResponseEntityMono(response, responseEntityBodyType);
+        }
+        return bodyToMono(response, responseType);
+    }
+
+    private Mono<?> buildResponseEntityMono(ClientResponse response, Type bodyType) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(response.statusCode())
+                .headers(response.headers().asHttpHeaders());
+        if (Void.class.equals(bodyType) || void.class.equals(bodyType)) {
+            return response.bodyToMono(Void.class).thenReturn(builder.build());
+        }
+        return bodyToMono(response, bodyType)
+                .map(body -> builder.body(body))
+                .switchIfEmpty(Mono.fromSupplier(builder::build));
+    }
+
+    private Mono<?> bodyToMono(ClientResponse response, Type responseType) {
         if (responseType == null || Void.class.equals(responseType)) {
             return response.bodyToMono(Void.class);
         }
@@ -425,14 +453,6 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         }
         if (responseType == DataBuffer.class) {
             return response.bodyToMono(DataBuffer.class);
-        }
-        // Streaming passthrough for Mono<ResponseEntity<Flux<DataBuffer>>>: skip the
-        // in-memory codec entirely so large payloads aren't bound by codec-max-in-memory-size.
-        if (isResponseEntityOfFluxDataBuffer(responseType)) {
-            Flux<DataBuffer> streaming = response.bodyToFlux(DataBuffer.class);
-            return Mono.just(ResponseEntity.status(response.statusCode())
-                    .headers(response.headers().asHttpHeaders())
-                    .body(streaming));
         }
         return response.bodyToMono(ParameterizedTypeReference.forType(responseType));
     }
@@ -450,14 +470,19 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         return response.bodyToFlux(ParameterizedTypeReference.forType(responseType));
     }
 
+    /** Returns the body type when {@code responseType} is {@code ResponseEntity<T>}. */
+    private static Type responseEntityBodyType(Type responseType) {
+        if (!(responseType instanceof java.lang.reflect.ParameterizedType outer)) return null;
+        if (!(outer.getRawType() instanceof Class<?> outerRaw)) return null;
+        if (!ResponseEntity.class.equals(outerRaw)) return null;
+        Type[] outerArgs = outer.getActualTypeArguments();
+        return outerArgs.length == 1 ? outerArgs[0] : null;
+    }
+
     /** {@code true} when {@code responseType} is exactly {@code ResponseEntity<Flux<DataBuffer>>}. */
     private static boolean isResponseEntityOfFluxDataBuffer(Type responseType) {
-        if (!(responseType instanceof java.lang.reflect.ParameterizedType outer)) return false;
-        if (!(outer.getRawType() instanceof Class<?> outerRaw)) return false;
-        if (!ResponseEntity.class.equals(outerRaw)) return false;
-        Type[] outerArgs = outer.getActualTypeArguments();
-        if (outerArgs.length != 1) return false;
-        if (!(outerArgs[0] instanceof java.lang.reflect.ParameterizedType inner)) return false;
+        Type bodyType = responseEntityBodyType(responseType);
+        if (!(bodyType instanceof java.lang.reflect.ParameterizedType inner)) return false;
         if (!(inner.getRawType() instanceof Class<?> innerRaw)) return false;
         if (!Flux.class.equals(innerRaw)) return false;
         Type[] innerArgs = inner.getActualTypeArguments();

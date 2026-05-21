@@ -51,17 +51,17 @@
 
 ## Priority 4 — HTTP contract ergonomics
 
-### [ ] 1.2 Non-streaming response envelope support
-- [ ] Support `Mono<ResponseEntity<T>>` for successful responses.
-- [ ] Support `Mono<ResponseEntity<Void>>`.
-- [ ] Preserve existing non-2xx error decoder and mapper behavior.
-- [ ] Document response-envelope usage.
+### [x] 1.2 Non-streaming response envelope support
+- [x] Support `Mono<ResponseEntity<T>>` for successful responses.
+- [x] Support `Mono<ResponseEntity<Void>>`.
+- [x] Preserve existing non-2xx error decoder and mapper behavior.
+- [x] Document response-envelope usage.
 
-### [ ] 1.3 Built-in Problem Detail error mapping
-- [ ] Add opt-in mapper for `application/problem+json`.
-- [ ] Preserve status, raw body, and `ErrorCategory`.
-- [ ] Test valid, invalid, missing-content-type, `4xx`, and `5xx` cases.
-- [ ] Document application handling examples.
+### [x] 1.3 Built-in Problem Detail error mapping
+- [x] Add opt-in mapper for `application/problem+json`.
+- [x] Preserve status, raw body, and `ErrorCategory`.
+- [x] Test valid, invalid, missing-content-type, `4xx`, and `5xx` cases.
+- [x] Document application handling examples.
 
 ---
 

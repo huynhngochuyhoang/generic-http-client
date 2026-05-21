@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **HTTP contract ergonomics.** Added non-streaming `Mono<ResponseEntity<T>>`
+  and `Mono<ResponseEntity<Void>>` response envelope support, plus an opt-in
+  `ProblemDetailErrorResponseMapper` for `application/problem+json` errors.
+
 ### Changed
 
 - **URI encoding contract hardened.** Request URI construction now preserves
