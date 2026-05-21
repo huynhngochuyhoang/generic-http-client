@@ -3,12 +3,14 @@ package io.github.huynhngochuyhoang.httpstarter.core;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.huynhngochuyhoang.httpstarter.exception.*;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.test.StepVerifier;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,6 +63,24 @@ class ProblemDetailErrorResponseMapperTest {
                     assertThat(ex.getProblemDetail().getTitle()).isEqualTo("Unavailable");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void ignoresProblemJson3xxStatusesWhenMapperIsUsedDirectly() throws Exception {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        ErrorResponseContext context = new ErrorResponseContext(
+                "problem-client",
+                302,
+                "not-json",
+                headers,
+                "GET",
+                "https://api.example.test/redirect",
+                null);
+
+        Optional<? extends Throwable> mapped = new ProblemDetailErrorResponseMapper(new ObjectMapper()).map(context);
+
+        assertThat(mapped).isEmpty();
     }
 
     @Test

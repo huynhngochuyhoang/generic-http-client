@@ -28,17 +28,22 @@ public class ProblemDetailErrorResponseMapper implements ErrorResponseMapper {
             return Optional.empty();
         }
 
+        int statusCode = context.statusCode();
+        if (statusCode < 400) {
+            return Optional.empty();
+        }
+
         ProblemDetail problemDetail = objectMapper.readValue(context.responseBody(), ProblemDetail.class);
-        if (context.statusCode() >= 400 && context.statusCode() < 500) {
+        if (statusCode < 500) {
             return Optional.of(new ProblemDetailHttpClientException(
-                    context.statusCode(),
+                    statusCode,
                     context.responseBody(),
                     context.requestMethod(),
                     context.requestUrl(),
                     problemDetail));
         }
         return Optional.of(new ProblemDetailRemoteServiceException(
-                context.statusCode(),
+                statusCode,
                 context.responseBody(),
                 context.requestMethod(),
                 context.requestUrl(),
