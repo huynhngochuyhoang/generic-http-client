@@ -16,8 +16,10 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -251,6 +253,36 @@ class DefaultErrorDecoderTest {
                 })
                 .verifyComplete();
     }
+
+    @Test
+    void shouldReadErrorBodyOnlyOnceWhenMapperFallsBackToDefaultDecoder() {
+        AtomicInteger bodySubscriptions = new AtomicInteger();
+        ErrorResponseMapper mapper = context -> {
+            throw new IllegalArgumentException("invalid structured body");
+        };
+        DefaultErrorDecoder mappedDecoder = new DefaultErrorDecoder("payment-service", List.of(mapper));
+        ClientResponse response = mock(ClientResponse.class);
+
+        when(response.statusCode()).thenReturn(HttpStatus.BAD_GATEWAY);
+        when(response.bodyToFlux(org.springframework.core.io.buffer.DataBuffer.class)).thenAnswer(invocation ->
+                Flux.defer(() -> {
+                    bodySubscriptions.incrementAndGet();
+                    return Flux.just(new DefaultDataBufferFactory()
+                            .wrap("not-json".getBytes(StandardCharsets.UTF_8)));
+                }));
+
+        StepVerifier.create(mappedDecoder.decode(response))
+                .assertNext(ex -> {
+                    assertEquals(RemoteServiceException.class, ex.getClass());
+                    RemoteServiceException rse = (RemoteServiceException) ex;
+                    assertEquals(502, rse.getStatusCode());
+                    assertEquals("not-json", rse.getResponseBody());
+                    assertEquals(ErrorCategory.SERVER_ERROR, rse.getErrorCategory());
+                })
+                .verifyComplete();
+        assertEquals(1, bodySubscriptions.get());
+    }
+
 
     static final class PaymentDeclinedException extends HttpClientException {
         PaymentDeclinedException(int statusCode, String responseBody) {

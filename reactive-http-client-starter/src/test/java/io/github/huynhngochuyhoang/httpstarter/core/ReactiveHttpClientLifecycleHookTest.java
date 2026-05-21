@@ -7,9 +7,12 @@ import io.github.huynhngochuyhoang.httpstarter.annotation.QueryParam;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.exception.HttpClientException;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
+import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserverEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientRequest;
@@ -21,10 +24,13 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -139,6 +145,65 @@ class ReactiveHttpClientLifecycleHookTest {
     }
 
     @Test
+    void shouldNotifyLifecycleAndObserverOnceWhenCancelledBeforeResponse() throws Throwable {
+        List<String> events = new ArrayList<>();
+        List<HttpClientObserverEvent> observed = new ArrayList<>();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.never())
+                .build();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, List.of(new RecordingHook("hook", events)),
+                new NoopResilienceOperatorApplier(), defaultConfig(), observed::add);
+
+        StepVerifier.create(invokeGet(handler, "42"))
+                .expectSubscription()
+                .thenCancel()
+                .verify(Duration.ofSeconds(2));
+
+        assertEquals(List.of(
+                "hook:start:1:get",
+                "hook:cancel:1"), events);
+        assertEquals(1, observed.size());
+        HttpClientObserverEvent event = observed.get(0);
+        assertEquals(null, event.getStatusCode());
+        assertInstanceOf(CancellationException.class, event.getError());
+    }
+
+    @Test
+    void shouldNotifyLifecycleAndObserverOnceWhenCancelledDuringBodyRead() throws Throwable {
+        List<String> events = new ArrayList<>();
+        List<HttpClientObserverEvent> observed = new ArrayList<>();
+        DefaultDataBufferFactory bufferFactory = new DefaultDataBufferFactory();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://test.local")
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "text/plain")
+                        .body(Flux.concat(
+                                Mono.fromSupplier(() -> bufferFactory.wrap("first".getBytes(StandardCharsets.UTF_8))),
+                                Mono.never()))
+                        .build()))
+                .build();
+        ReactiveClientInvocationHandler handler = createHandler(webClient, List.of(new RecordingHook("hook", events)),
+                new NoopResilienceOperatorApplier(), defaultConfig(), observed::add);
+        Method method = DataBufferLifecycleClient.class.getMethod("stream");
+
+        @SuppressWarnings("unchecked")
+        Flux<DataBuffer> flux = (Flux<DataBuffer>) handler.invoke(null, method, new Object[0]);
+        StepVerifier.create(flux)
+                .expectNextMatches(buffer -> buffer.readableByteCount() == 5)
+                .thenCancel()
+                .verify(Duration.ofSeconds(2));
+
+        assertEquals(List.of(
+                "hook:start:1:stream",
+                "hook:cancel:1"), events);
+        assertEquals(1, observed.size());
+        HttpClientObserverEvent event = observed.get(0);
+        assertEquals(200, event.getStatusCode());
+        assertInstanceOf(CancellationException.class, event.getError());
+    }
+
+    @Test
     void shouldPreserveNullQueryElementsWhenLifecycleHookIsRegistered() throws Throwable {
         AtomicReference<ClientRequest> capturedRequest = new AtomicReference<>();
         List<ReactiveHttpClientLifecycleContext> starts = new ArrayList<>();
@@ -190,16 +255,28 @@ class ReactiveHttpClientLifecycleHookTest {
                 .build();
     }
 
-    @SuppressWarnings("unchecked")
     private static ReactiveClientInvocationHandler createHandler(
             WebClient webClient,
             List<ReactiveHttpClientLifecycleHook> hooks,
             ResilienceOperatorApplier resilienceOperatorApplier,
             ReactiveHttpClientProperties.ClientConfig config) {
+        return createHandler(webClient, hooks, resilienceOperatorApplier, config, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ReactiveClientInvocationHandler createHandler(
+            WebClient webClient,
+            List<ReactiveHttpClientLifecycleHook> hooks,
+            ResilienceOperatorApplier resilienceOperatorApplier,
+            ReactiveHttpClientProperties.ClientConfig config,
+            HttpClientObserver observer) {
         ApplicationContext appCtx = mock(ApplicationContext.class);
         ObjectProvider<HttpClientObserver> observerProvider = mock(ObjectProvider.class);
         when(appCtx.getBeanProvider(HttpClientObserver.class)).thenReturn(observerProvider);
-        when(observerProvider.getIfAvailable()).thenReturn(null);
+        when(observerProvider.orderedStream()).thenAnswer(invocation -> observer != null
+                ? java.util.stream.Stream.of(observer)
+                : java.util.stream.Stream.empty());
+        when(observerProvider.getIfAvailable()).thenReturn(observer);
 
         ObjectProvider<ReactiveHttpClientLifecycleHook> hookProvider = mock(ObjectProvider.class);
         when(appCtx.getBeanProvider(ReactiveHttpClientLifecycleHook.class)).thenReturn(hookProvider);
@@ -250,6 +327,11 @@ class ReactiveHttpClientLifecycleHookTest {
     interface StreamingLifecycleClient {
         @GET("/stream")
         Flux<String> stream();
+    }
+
+    interface DataBufferLifecycleClient {
+        @GET("/stream")
+        Flux<DataBuffer> stream();
     }
 
     interface QueryLifecycleClient {

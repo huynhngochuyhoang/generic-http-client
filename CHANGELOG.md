@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **URI encoding contract hardened.** Request URI construction now preserves
+  literal query strings in annotation and `@ApiRef` paths while appending
+  configured and method-level query parameters consistently.
+- **Numeric configuration validation.** Timeout, pool, codec, histogram, and
+  health-threshold settings now fail fast with property-specific range errors
+  instead of reaching Netty or metrics code with invalid values.
+- **Reactive body safety guardrails.** Cancellation before response and during
+  body streaming now has lifecycle and observer terminal-signal coverage, while
+  mapper fallback and streaming response tests assert bodies are not consumed or
+  buffered accidentally.
+
+### Docs
+
+- Documented the raw-value URI encoding contract for `@PathVar`,
+  `@QueryParam`, literal path query strings, and `@ApiRef` paths.
+
 ---
 
 ## [2.3.0] - 2026-05-18

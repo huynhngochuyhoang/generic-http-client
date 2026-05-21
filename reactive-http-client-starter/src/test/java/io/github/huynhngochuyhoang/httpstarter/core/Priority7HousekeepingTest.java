@@ -1,11 +1,11 @@
 package io.github.huynhngochuyhoang.httpstarter.core;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.huynhngochuyhoang.httpstarter.annotation.GET;
 import io.github.huynhngochuyhoang.httpstarter.config.ReactiveHttpClientProperties;
 import io.github.huynhngochuyhoang.httpstarter.exception.HttpClientException;
 import io.github.huynhngochuyhoang.httpstarter.exception.RemoteServiceException;
 import io.github.huynhngochuyhoang.httpstarter.observability.HttpClientObserver;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
@@ -18,11 +18,7 @@ import reactor.test.StepVerifier;
 
 import java.lang.reflect.Method;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,12 +39,10 @@ class Priority7HousekeepingTest {
 
     @Test
     void codecSizeMbNegativeValueIsRejectedAtStartup() {
-        ReactiveHttpClientFactoryBean<Object> factory = new ReactiveHttpClientFactoryBean<>();
         ReactiveHttpClientProperties.ClientConfig config = new ReactiveHttpClientProperties.ClientConfig();
-        config.setCodecMaxInMemorySizeMb(-1);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> factory.resolveCodecMaxInMemorySizeBytes(config));
+                () -> config.setCodecMaxInMemorySizeMb(-1));
         assertTrue(ex.getMessage().contains("must be >= 0"),
                 "Error should mention the minimum allowed value");
     }
