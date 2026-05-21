@@ -204,7 +204,7 @@ When `@ApiRef` is present, `method` and `path` are required in the map entry.
 
 ### `@TimeoutMs`
 
-Per-method response timeout in milliseconds. Overrides `resilience.timeout-ms`. `0` disables the per-request timeout for that method without touching the global safety-net timeouts.
+Per-method response timeout in milliseconds. Overrides `@ApiRef timeout-ms`, client `request-timeout-ms`, and the deprecated `resilience.timeout-ms` alias. `0` disables the per-request timeout for that method without touching the global safety-net timeouts.
 
 ```java
 @GET("/users/{id}")

@@ -251,6 +251,7 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
                     // Apply when: (a) caller set an explicit @TimeoutMs (including 0 to disable), or (b) a resilience timeout resolved to > 0.
                     boolean shouldApplyResponseTimeout = plan.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
                             || effectiveApi.timeoutMs() != MethodMetadata.TIMEOUT_NOT_SET
+                            || isClientLevelRequestTimeoutConfigured()
                             || timeoutMs > 0;
                     return configureNativeRequest(requestHeadersSpec, timeoutMs, shouldApplyResponseTimeout, requestUrl);
                 });
@@ -512,12 +513,23 @@ public class ReactiveClientInvocationHandler implements InvocationHandler {
         if (configuredApiTimeoutMs != MethodMetadata.TIMEOUT_NOT_SET) {
             return configuredApiTimeoutMs;
         }
-        // Fall back to resilience timeout when method timeout is not configured.
+        // Canonical client-level timeout wins over the deprecated resilience alias.
+        if (clientConfig.isRequestTimeoutMsConfigured()) {
+            return clientConfig.getRequestTimeoutMs();
+        }
         ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
-        if (resilience != null && resilience.isEnabled() && resilience.getTimeoutMs() > 0) {
+        if (resilience != null && resilience.isTimeoutMsConfigured()) {
             return resilience.getTimeoutMs();
         }
         return 0;
+    }
+
+    private boolean isClientLevelRequestTimeoutConfigured() {
+        if (clientConfig.isRequestTimeoutMsConfigured()) {
+            return true;
+        }
+        ReactiveHttpClientProperties.ResilienceConfig resilience = clientConfig.getResilience();
+        return resilience != null && resilience.isTimeoutMsConfigured();
     }
 
     private EffectiveApi resolveEffectiveApi(Method method, MethodMetadata meta) {

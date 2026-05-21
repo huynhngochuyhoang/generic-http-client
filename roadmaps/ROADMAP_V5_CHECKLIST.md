@@ -34,18 +34,18 @@
 
 ## Priority 3 — Configuration clarity
 
-### [ ] 2.1 Move request timeout configuration out of resilience
-- [ ] Add the new canonical client request-timeout property.
-- [ ] Keep `resilience.timeout-ms` as a deprecated alias for one compatibility
+### [x] 2.1 Move request timeout configuration out of resilience
+- [x] Add the new canonical client request-timeout property.
+- [x] Keep `resilience.timeout-ms` as a deprecated alias for one compatibility
   cycle.
-- [ ] Define conflict behavior when both properties are configured.
-- [ ] Update metadata, timeout docs, and guardrail docs.
+- [x] Define conflict behavior when both properties are configured.
+- [x] Update metadata, timeout docs, and guardrail docs.
 
-### [ ] 2.2 Auto-configuration and override contract audit
-- [ ] Add context-runner tests for optional dependency combinations.
-- [ ] Add tests for user-supplied observer/auth/customizer override paths.
-- [ ] Document named built-in beans that users may override.
-- [ ] Verify disabled properties suppress expected beans.
+### [x] 2.2 Auto-configuration and override contract audit
+- [x] Add context-runner tests for optional dependency combinations.
+- [x] Add tests for user-supplied observer/auth/customizer override paths.
+- [x] Document named built-in beans that users may override.
+- [x] Verify disabled properties suppress expected beans.
 
 ---
 

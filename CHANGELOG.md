@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   body streaming now has lifecycle and observer terminal-signal coverage, while
   mapper fallback and streaming response tests assert bodies are not consumed or
   buffered accidentally.
+- **Configuration clarity.** Added canonical client-level
+  `request-timeout-ms`, kept `resilience.timeout-ms` as a deprecated alias, and
+  documented override contracts for named built-in beans and disabled
+  auto-configuration paths.
 
 ### Docs
 
