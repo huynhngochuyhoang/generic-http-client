@@ -24,11 +24,11 @@
 
 ## Priority 2 — Reactive body safety
 
-### [ ] 3.2 Body consumption and cancellation safety
-- [ ] Test cancellation before response and during response body read.
-- [ ] Verify lifecycle hooks and observers receive one terminal signal.
-- [ ] Verify mapper fallback does not consume the body twice.
-- [ ] Verify streaming responses do not buffer accidentally.
+### [x] 3.2 Body consumption and cancellation safety
+- [x] Test cancellation before response and during response body read.
+- [x] Verify lifecycle hooks and observers receive one terminal signal.
+- [x] Verify mapper fallback does not consume the body twice.
+- [x] Verify streaming responses do not buffer accidentally.
 
 ---
 

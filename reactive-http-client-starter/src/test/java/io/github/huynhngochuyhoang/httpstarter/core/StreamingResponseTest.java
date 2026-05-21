@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.core.io.buffer.NettyDataBufferFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,9 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -77,6 +81,40 @@ class StreamingResponseTest {
                 .expectNext((long) CHUNK_COUNT * CHUNK_SIZE)
                 .verifyComplete();
     }
+
+    @Test
+    void monoResponseEntityFluxDataBufferDoesNotSubscribeToBodyBeforeCallerConsumesIt() {
+        AtomicInteger bodySubscriptions = new AtomicInteger();
+        DefaultDataBufferFactory bufferFactory = new DefaultDataBufferFactory();
+        Flux<DataBuffer> body = Flux.defer(() -> {
+            bodySubscriptions.incrementAndGet();
+            return Flux.just(bufferFactory.wrap("chunk".getBytes(StandardCharsets.UTF_8)));
+        });
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, "application/octet-stream")
+                .body(body)
+                .build();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("http://stream.test")
+                .exchangeFunction(req -> Mono.just(response))
+                .build();
+        ReactiveClientInvocationHandler handler = createHandler(webClient);
+        AtomicReference<ResponseEntity<Flux<DataBuffer>>> entityRef = new AtomicReference<>();
+
+        StepVerifier.create(invokeStreamEntity(handler).doOnNext(entityRef::set))
+                .assertNext(entity -> {
+                    assertThat(entity.getStatusCode().value()).isEqualTo(200);
+                    assertThat(entity.getBody()).isNotNull();
+                })
+                .verifyComplete();
+
+        assertThat(bodySubscriptions.get()).isZero();
+        StepVerifier.create(entityRef.get().getBody().map(DataBuffer::readableByteCount))
+                .expectNext(5)
+                .verifyComplete();
+        assertThat(bodySubscriptions.get()).isEqualTo(1);
+    }
+
 
     // -------------------------------------------------------------------------
     // Helpers
